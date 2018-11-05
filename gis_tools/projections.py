@@ -1,0 +1,160 @@
+# -*- coding: utf-8 -*-
+
+""" Tools related to geographic projections
+
+More detailed description.
+"""
+
+# import
+
+# __all__ = []
+# __version__ = '0.1'
+import fiona.crs
+
+import pyproj
+
+from osgeo import gdal, osr, ogr
+
+from utils.check import check_file, type_assert
+
+__author__ = 'Benjamin Pillot'
+__copyright__ = 'Copyright 2018, Benjamin Pillot'
+__email__ = 'benjaminpillot@riseup.net'
+
+
+osr.UseExceptions()
+
+
+def proj4_from_raster(raster_file: str):
+    """ Get pyproj Proj4 projection from raster file
+
+    :param raster_file:
+    :return:
+    """
+    check_file(raster_file)
+
+    try:
+        proj = gdal.Open(raster_file).GetProjection()
+    except RuntimeError:
+        raise ValueError("Unable to read raster file '{}'".format(raster_file))
+
+    return proj4_from_wkt(proj)
+
+
+def proj4_from_layer(layer_file: str):
+    """ Get pyproj Proj4 projection from layer file
+
+    :param layer_file:
+    :return:
+    """
+    check_file(layer_file)
+
+    try:
+        src_ds = ogr.Open(layer_file)
+        return src_ds.GetLayer().GetSpatialRef().ExportToProj4()
+    except RuntimeError:
+        raise ValueError("Unable to read layer file '%s'" % layer_file)
+
+
+def proj4_from_wkt(wkt):
+    """ Convert wkt srs to proj4
+
+    :param wkt:
+    :return:
+    """
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(wkt)
+
+    return srs.ExportToProj4()
+
+
+def proj4_from(proj):
+    """ Convert projection to proj4 string
+
+    Convert projection string, dictionary, etc.
+    to proj4 string
+    :param proj:
+    :return:
+    """
+    if type(proj) == int:
+        try:
+            proj4_str = pyproj.Proj(fiona.crs.from_epsg(proj)).srs
+        except (ValueError, RuntimeError):
+            raise ValueError("Invalid EPSG code")
+    elif type(proj) == str or type(proj) == dict:
+        try:
+            proj4_str = pyproj.Proj(proj).srs
+        except RuntimeError:
+            try:
+                proj4_str = proj4_from_wkt(proj)
+            except (RuntimeError, TypeError):
+                raise ValueError("Invalid projection string or dictionary")
+    elif type(proj) == pyproj.Proj:
+        proj4_str = proj.srs
+    else:
+        raise ValueError("Invalid projection format: '{}'".format(type(proj)))
+
+    return proj4_str
+
+
+@type_assert(proj1=(int, str, dict, pyproj.Proj), proj2=(int, str, dict, pyproj.Proj))
+def is_equal(proj1, proj2):
+    """ Compare 2 projections
+
+    :param proj1:
+    :param proj2:
+    :return: True or False
+    """
+    # From an idea from https://github.com/jswhit/pyproj/issues/15
+    # Use OGR library to compare projections
+    srs = [srs_from(proj1), srs_from(proj2)]
+
+    boolean = (False, True)
+    return boolean[srs[0].IsSame(srs[1])]
+
+
+def ellipsoid_from(proj):
+    """ Get Ellipsoid model from projection
+
+    :param proj:
+    :return:
+    """
+    from gis_tools.coordinates import Ellipsoid
+
+    srs = srs_from(proj)
+    ellps = srs.GetAttrValue('Spheroid').replace(' ', '')  # Be sure all spaces in string are removed
+
+    return Ellipsoid(ellps)
+
+
+def srs_from(proj):
+    """ Get spatial reference system from projection
+
+    :param proj:
+    :return: SpatialReference instance (osgeo.osr package)
+    """
+    proj4 = proj4_from(proj)
+    srs = osr.SpatialReference()
+    srs.ImportFromProj4(proj4)
+
+    return srs
+
+
+def wkt_from(proj):
+    """ Get WKT spatial reference system from projection
+
+    :param proj:
+    :return:
+    """
+    return srs_from(proj).ExportToWkt()
+
+
+if __name__ == "__main__":
+    solar_map = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Resource rasters/Monthly solar maps French " \
+                          "Guyana/Irr_Total_GHI.img"
+    parc_amazonien = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp"
+    proj_parc = ogr.Open(parc_amazonien)
+    proj_parc = proj_parc.GetLayer().GetSpatialRef().ExportToProj4()
+    proj_raster = proj4_from_raster(solar_map)
+    test = is_equal(proj_parc, proj_raster)
+    print(proj_parc, proj_raster, test)
