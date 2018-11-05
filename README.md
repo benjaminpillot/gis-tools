@@ -19,4 +19,6 @@ In theory, it should run with any equal or earlier version of the following libr
 
 ### Install
 You may install GisTools using ``pip`` in a terminal
-    $ pip install gis_tools
+```
+$ pip install gis_tools
+```
