@@ -16,3 +16,7 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` rasterio >= 0.36.0 ``
 * `` rtree >= 0.8.3 ``
 * `` shapely >= 1.6.4 ``
+
+### Install
+You may install GisTools usin ``pip`` in a terminal
+> $ pip install gis_tools
