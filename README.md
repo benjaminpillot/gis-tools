@@ -18,11 +18,14 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` shapely >= 1.6.4 ``
 
 ## Install
+Be careful when you install GisTools dependencies.
+
+_Using_ ``pip``
 You may install GisTools using ``pip`` in a terminal
 ```
 $ pip install gis_tools
 ```
-#### Install cpc.geogrids package
+#### Install cpc.geogrids dependency
 ```
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
