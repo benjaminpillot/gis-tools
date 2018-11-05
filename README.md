@@ -21,6 +21,7 @@ In theory, it should run with any equal or earlier version of the following libr
 Be careful when you install GisTools dependencies.
 
 _Using_ ``pip``
+
 You may install GisTools using ``pip`` in a terminal
 ```
 $ pip install gis_tools
