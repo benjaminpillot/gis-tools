@@ -26,7 +26,7 @@ You may install GisTools using ``pip`` in a terminal
 ```
 $ pip install gis_tools
 ```
-#### Note:### installing cpc.geogrids dependency
+**Note:** installing cpc.geogrids dependency
 ```
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
