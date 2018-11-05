@@ -1,8 +1,8 @@
-# geotools
+# gis_tools
 Some geographical tools for python developers
 
 ## Introduction
-GeoTools is a small Python library for performing geographical computations.
+GisTools is a small Python library for performing geographical computations.
 
 ## Requirements
 In theory, it should run with any equal or earlier version of the following libraries. However, it is possible to experience some trouble with some earlier versions of the rasterio package. Please report any issue you might cope with.
@@ -20,14 +20,32 @@ In theory, it should run with any equal or earlier version of the following libr
 ## Install
 Be careful when you install GisTools dependencies.
 
-_Using_ ``pip``
+### From PyPi
 
 You may install GisTools using ``pip`` in a terminal
 ```
 $ pip install gis_tools
 ```
-**Note:** installing cpc.geogrids dependency
+
+### From GitHub
+```
+$ git clone https://github.com/Benjamin2b/gis_tools
+$ cd gis_tools/
+$ python setup.py install
+```
+
+**Note:** 
+
+Installing cpc.geogrids dependency
 ```
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
 $ make install
+```
+
+Installing network-metis dependency
+```
+$ git clone https://github.com/networkx/networkx-metis.git
+$ cd networkx-metis
+$ python setup.py install
+```
