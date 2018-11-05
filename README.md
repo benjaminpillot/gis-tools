@@ -5,7 +5,7 @@ Some geographical tools for python developers
 GeoTools is a small Python library for performing geographical computations.
 
 ### Requirements
-* > cpc.geogrids
+* > cpc.geogrids >
 * > geopandas
 * > networkx
 * > numpy
