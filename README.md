@@ -27,13 +27,6 @@ You may install GisTools using ``pip`` in a terminal
 $ pip install gis_tools
 ```
 
-### From GitHub
-```
-$ git clone https://github.com/Benjamin2b/gis_tools
-$ cd gis_tools/
-$ python setup.py install
-```
-
 **Note:** 
 
 Installing cpc.geogrids dependency
