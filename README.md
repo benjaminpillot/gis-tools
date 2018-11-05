@@ -7,7 +7,7 @@ GeoTools is a small Python library for performing geographical computations.
 ### Requirements
 In theory, it should run with any equal or earlier version of the following libraries. However, it is possible to experience some trouble with some earlier versions of the rasterio package. Please report any issue you might cope with.
 
-* ``` cpc.geogrids >= 0.2.3 ```
+* `` cpc.geogrids >= 0.2.3 ``
 * ``` geopandas >= 0.3.0 ```
 * ``` networkx >= 2.1 ```
 * ``` numpy >= 1.14.3 ```
