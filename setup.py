@@ -12,5 +12,5 @@ setup(name='gis_tools',
       author='Benjamin Pillot',
       author_email='benjaminpillot@riseup.net',
       license='GNU GPL v3.0',
-      packages=['gis_tools', 'utils'],
+      packages=['gis_tools', 'utils', 'toolset'],
       zip_safe=False)
