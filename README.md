@@ -5,7 +5,7 @@ Some geographical tools for python developers
 GisTools is a small Python library for performing geographical computations.
 
 ## Requirements
-In theory, it should run with any equal or earlier version of the following libraries. However, it is possible to experience some trouble with some earlier versions of the rasterio package. Please report any issue you might cope with.
+In theory, it should run with any equal or earlier version of the following libraries. Please report any issue you might cope with.
 
 * `` cpc.geogrids >= 0.2.3 ``
 * `` fiona >= 1.7.13 ``
