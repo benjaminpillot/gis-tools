@@ -1,5 +1,8 @@
 from setuptools import setup
 
+with open("README.md", 'r') as fh:
+    long_description = fh.read()
+
 setup(name='gis_tools',
       version='0.1',
       description='Some geographical tools for Python developers',
