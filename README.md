@@ -1,4 +1,4 @@
-# gis_tools
+# GisTools
 Some geographical tools for python developers
 
 ## Introduction
