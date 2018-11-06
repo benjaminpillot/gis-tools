@@ -54,7 +54,7 @@ $ python setup.py install
 
 ## Examples
 
-* Use ``DigitalElevationModel``, ``PolygonLayer`` and ``ZonalStatistics`` classes to retrieve average slope within each polygon of a shapefile
+Use ``DigitalElevationModel``, ``PolygonLayer`` and ``ZonalStatistics`` classes to retrieve average slope within each polygon of a shapefile
 ```
 >>> dem = DigitalElevationModel("path/to/dem.tif")
 >>> slope = dem.compute_slope()
