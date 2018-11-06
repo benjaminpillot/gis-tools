@@ -1,0 +1,12 @@
+cpc.geogrids>=0.2.3
+fiona>=1.7.13
+geopandas>=0.3.0
+matplotlib>=2.2.3
+networkx>=2.1
+numpy>=1.14.3
+gdal>=2.2.4
+pyproj>=1.9.5
+rasterio>=0.36.0
+rtree>=0.8.3
+scipy>=1.1.0
+shapely>=1.6.4
