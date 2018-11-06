@@ -144,12 +144,11 @@ def geopandas_to_raster(gpd_frame, raster_file, gpd_column, geo_grid: GeoGrid, d
                        count=1, dtype=datatype, crs=gpd_frame.crs, transform=Affine.from_gdal(
                         *geo_grid.geo_transform)) \
             as out:
-        out_arr = out.read(1)
 
         # this is where we create a generator of geom, value pairs to use in rasterizing
         shapes = ((geom, value) for geom, value in zip(gpd_frame.geometry, gpd_frame[gpd_column]))
 
-        burned = features.rasterize(shapes=shapes, fill=0, out=out_arr,
+        burned = features.rasterize(shapes=shapes, fill=0, out_shape=(geo_grid.num_y, geo_grid.num_x), dtype=datatype,
                                     transform=Affine.from_gdal(*geo_grid.geo_transform), all_touched=all_touched)
         out.write_band(1, burned)
 
