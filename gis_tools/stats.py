@@ -11,8 +11,8 @@ from math import sqrt as msqrt
 
 import numpy as np
 
-from gis_tools.exceptions import ZonalStatisticsError
 from gis_tools.layer import GeoLayer
+from gis_tools.exceptions import ZonalStatisticsError
 from gis_tools.raster import RasterMap
 from utils.check import type_assert, check_type_in_collection
 from utils.sys.timer import Timer
@@ -129,15 +129,16 @@ def weight_std(values, weights):
 if __name__ == '__main__':
     from gis_tools.raster import DigitalElevationModel
     from gis_tools.layer import PolygonLayer
-    from gis_tools.network import Edge
     dem = DigitalElevationModel("/home/benjamin/Documents/Post-doc Guyane/Data/DEM/srtm_guyana.tif",
                                 no_data_value=-32768)
+    # biomass = RasterMap("/home/benjamin/Documents/Post-doc Guyane/Data/Resource rasters/Biomasse "
+    #                     "Guyane/AGB_map/biomasse_ressource.tif")
+    # biomass = biomass.to_crs({'init': 'epsg:32622'})
     dem_utm = dem.to_crs({'init': 'epsg:32622'})
     slope = dem_utm.compute_slope()
     print(slope.raster_file)
-    # roads = Edge("/home/benjamin/Documents/Post-doc Guyane/Data/Geo layers/Cartes administratives/roads_final.shp")
+
     layer = PolygonLayer("/home/benjamin/Documents/Post-doc Guyane/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp")
-    # zonal_stat = ZonalStatistics(slope, roads, is_surface_weighted=True, all_touched=True)
     zonal_stat = ZonalStatistics(slope, layer, is_surface_weighted=False, all_touched=True)
     with Timer() as t:
         avg = zonal_stat.mean()
