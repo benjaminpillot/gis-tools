@@ -22,11 +22,18 @@ In theory, it should run with any equal or earlier version of the following libr
 ## Install
 Be careful when you install GisTools dependencies.
 
-### From PyPi
+### Using PyPi
 
 You may install GisTools using ``pip`` in a terminal
 ```
 $ pip install gis_tools
+```
+
+### Using conda
+
+GisTools is also installable through Anaconda
+```
+$ conda install -c benjaminpillot gis_tools
 ```
 
 **Note:** 
