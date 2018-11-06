@@ -51,3 +51,15 @@ $ git clone https://github.com/networkx/networkx-metis.git
 $ cd networkx-metis
 $ python setup.py install
 ```
+
+## Examples
+
+Use ``DigitalElevationModel``, ``PolygonLayer`` and ``ZonalStatistics`` classes to retrieve average slope within each polygon of a shapefile
+```
+>>> dem = DigitalElevationModel("path/to/dem.tif")
+>>> slope = dem.compute_slope()
+>>> layer = PolygonLayer("path/to/layer.shp")
+>>> zonal_stat = ZonalStatistics(slope, layer, is_surface_weighted=False, all_touched=True)
+>>> average = zonal_stat.mean()
+```
+
