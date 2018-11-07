@@ -36,7 +36,6 @@ from utils.check.value import check_sub_collection_in_collection
 
 # __all__ = []
 # __version__ = '0.1'
-from utils.sys.timer import Timer
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
