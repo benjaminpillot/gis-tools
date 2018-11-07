@@ -9,11 +9,12 @@ In theory, it should run with any equal or earlier version of the following libr
 
 * `` cpc.geogrids >= 0.2.3 ``
 * `` fiona >= 1.7.13 ``
+* `` gdal >= 2.2.4 ``
 * `` geopandas >= 0.3.0 ``
 * `` matplotlib >= 2.2.3 ``
 * `` networkx >= 2.1 ``
 * `` numpy >= 1.14.3 ``
-* `` gdal >= 2.2.4 ``
+* `` pandas >= 0.23.4``
 * `` pyproj >= 1.9.5 ``
 * `` rasterio >= 0.36.0 ``
 * `` rtree >= 0.8.3 ``
