@@ -14,13 +14,13 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` matplotlib >= 2.2.3 ``
 * `` networkx >= 2.1 ``
 * `` numpy >= 1.14.3 ``
+* `` nxmetis == 1.1``
 * `` pandas >= 0.23.4``
 * `` pyproj >= 1.9.5 ``
 * `` rasterio >= 0.36.0 ``
 * `` rtree >= 0.8.3 ``
 * `` shapely >= 1.6.4 ``
 
-The package also sparsely use ``progressbar2`` and ``nxmetis``.
 
 ## Install
 Be careful when you install GisTools dependencies. If you're not sure about it, prefer the conda installation which should take care of everything for you, except ``cpc.geogrids`` and ``nxmetis`` whose installation is described below.
