@@ -173,7 +173,7 @@ def is_property(obj, attribute):
 
 
 if __name__ == "__main__":
-    from geotools.network import Road
-    from geotools.layer import GeoLayer
+    from gistools.network import Road
+    from gistools.layer import GeoLayer
     road = Road("/home/benjamin/Documents/Post-doc Guyane/Data/Geo layers/Road network/main_road_network.shp")
     check_type(road, GeoLayer)

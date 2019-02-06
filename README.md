@@ -14,7 +14,7 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` matplotlib >= 2.2.3 ``
 * `` networkx >= 2.1 ``
 * `` numpy >= 1.14.3 ``
-* `` nxmetis == 1.1``
+* `` metis == 0.2a4``
 * `` pandas >= 0.23.4``
 * `` pyproj >= 1.9.5 ``
 * `` rasterio >= 0.36.0 ``
@@ -46,13 +46,6 @@ Installing cpc.geogrids dependency
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
 $ make install
-```
-
-Installing networkx-metis dependency
-```
-$ git clone https://github.com/networkx/networkx-metis.git
-$ cd networkx-metis
-$ python setup.py install
 ```
 
 ## Examples

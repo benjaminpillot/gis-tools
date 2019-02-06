@@ -6,13 +6,11 @@ Check and validate value of variables, class attributes and return
 error(s) if necessary
 """
 import os
-# import
 from collections import Collection
 
 from utils.check import check_type, isfile, type_assert
-from typing import Union
 
-__all__ = ['check_string', 'check_file', 'check_sub_collection_in_collection']
+# __all__ = ['check_string', 'check_file', 'check_sub_collection_in_collection']
 __version__ = '0.1'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'

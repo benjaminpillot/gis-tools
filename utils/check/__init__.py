@@ -14,3 +14,4 @@ __email__ = 'benjaminpillot@riseup.net'
 # import
 from utils.check.type import *
 from utils.check.value import *
+from utils.check.descriptor import *

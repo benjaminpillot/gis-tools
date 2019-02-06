@@ -10,3 +10,6 @@ Gather common utility tools
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
+
+# import
+from . import *
