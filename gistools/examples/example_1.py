@@ -8,8 +8,8 @@
 from matplotlib import pyplot as plt
 
 from gistools.topography import get_horizon
-from gistools.utils import Timer
 from gistools.raster import DigitalElevationModel
+from gistools.utils.sys.timer import Timer
 
 __version__ = '0.1'
 __author__ = 'Benjamin Pillot'
