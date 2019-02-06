@@ -10,7 +10,6 @@ from numpy import arcsin, cos, sin, pi, sqrt
 
 from gistools.coordinates import Ellipsoid
 from pyproj import Geod
-from utils.check import check_type
 
 # __all__ = ["great_circle", "euclidean_distance", "compute_distance", "pyproj_distance"]
 # __version__ = '0.1'

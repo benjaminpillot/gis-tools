@@ -5,7 +5,7 @@
 More detailed description.
 """
 
-from utils.check import check_type, check_file
+from gistools.utils import check_file
 import numpy as np
 import os
 

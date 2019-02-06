@@ -32,12 +32,13 @@ from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points
     partition_polygon, shape_factor
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
-from toolset.list import split_list_by_index
-from utils.check import check_type, check_string, type_assert, protected_property
-from utils.check.value import check_sub_collection_in_collection
+from gistools.toolset.list import split_list_by_index
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import check_type, type_assert
 
 # __all__ = []
 # __version__ = '0.1'
+from gistools.utils.check.value import check_string, check_sub_collection_in_collection
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
@@ -1132,7 +1133,6 @@ class PointLayer(GeoLayer):
 
 
 if __name__ == '__main__':
-    from matplotlib import pyplot as plt
     # _layer = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar PV/result.geojson")
     _layer_1 = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar GHI/"
                             "pv_polygons_permissive.geojson")

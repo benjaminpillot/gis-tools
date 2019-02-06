@@ -12,7 +12,7 @@ More detailed description.
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
-from utils.check import check_type
+from gistools.utils.check.type import check_type
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

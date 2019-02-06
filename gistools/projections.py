@@ -15,7 +15,8 @@ import pyproj
 
 from osgeo import gdal, osr, ogr
 
-from utils.check import check_file, type_assert
+from gistools.utils.check.type import type_assert
+from gistools.utils.check.value import check_file
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

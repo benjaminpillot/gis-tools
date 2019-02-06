@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 
-""" Module summary description.
+""" Compute horizon obstruction from DEM
 
-More detailed description.
+
 """
 
 from matplotlib import pyplot as plt
 
 from gistools.topography import get_horizon
-from utils.sys.timer import Timer
+from gistools.utils import Timer
 from gistools.raster import DigitalElevationModel
 
 __version__ = '0.1'

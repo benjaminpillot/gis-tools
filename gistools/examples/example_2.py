@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
-""" Example 1
+""" Compute statistics using ZonalStatistics
 
-More detailed description.
+Compute average from raster cells within a polygon
 """
 
-from gis_tools.raster import RasterMap
-from gis_tools.layer import PolygonLayer
+from gistools.stats import ZonalStatistics
+from gistools.raster import RasterMap
+from gistools.layer import PolygonLayer
 
 # __all__ = []
 # __version__ = '0.1'

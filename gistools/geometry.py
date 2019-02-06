@@ -18,8 +18,8 @@ from matplotlib import pyplot as plt
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
-from utils.check import check_string
-from utils.check.type import is_iterable, type_assert
+from gistools.utils.check.value import check_string
+from gistools.utils.check.type import is_iterable, type_assert
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

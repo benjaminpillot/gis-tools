@@ -16,8 +16,10 @@ from shapely.geometry import Point, LineString
 from gistools.coordinates import r_tree_idx
 from gistools.exceptions import EdgeError, NetworkError, RoadError, RoadNodeError
 from gistools.layer import return_new_instance, LineLayer, PointLayer
-from toolset.list import split_list_by_index
-from utils.check import check_type, check_string, protected_property, type_assert, check_type_in_collection
+from gistools.toolset.list import split_list_by_index
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import check_type, type_assert, check_type_in_collection
+from gistools.utils.check.value import check_string
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
@@ -896,7 +898,7 @@ class ElectricalGrid(Network):
 
 if __name__ == '__main__':
     from matplotlib import pyplot as plt
-    from utils.sys.timer import Timer
+    from gistools.utils import Timer
     road = Road("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
     road_nodes = RoadNode("/home/benjamin/Documents/Data/Geo layers/Road network/nodes.shp")
     road_nodes.set_max_speed("NATURE", {'Carrefour simple': 30, 'Carrefour aménagé': 40})

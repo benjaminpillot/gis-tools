@@ -14,8 +14,7 @@ import numpy as np
 from gistools.layer import GeoLayer
 from gistools.exceptions import ZonalStatisticsError
 from gistools.raster import RasterMap
-from utils.check import type_assert, check_type_in_collection
-from utils.sys.timer import Timer
+from gistools.utils.check.type import type_assert, check_type_in_collection
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
@@ -127,22 +126,4 @@ def weight_std(values, weights):
 
 
 if __name__ == '__main__':
-    from gistools.raster import DigitalElevationModel
-    from gistools.layer import PolygonLayer
-    dem = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_guyana.tif",
-                                no_data_value=-32768)
-    # raster = RasterMap("/home/benjamin/Desktop/sen_admbnda_adm1_1m_gov_ocha_04082017/yo.tif")
-    # biomass = biomass.to_crs({'init': 'epsg:32622'})
-    # dem_utm = dem.to_crs({'init': 'epsg:32622'})
-    # slope = dem_utm.compute_slope()
-    # print(slope.raster_file)
-
-    layer = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp")
-    # layer = PolygonLayer("/home/benjamin/Desktop/sen_admbnda_adm1_1m_gov_ocha_04082017"
-    #                      "/sen_admbnda_adm1_1m_gov_ocha_04082017.shp")
-    # raster = raster.gdal_resample(10)
-    zonal_stat = ZonalStatistics([dem, dem, dem], layer, is_surface_weighted=False, all_touched=True)
-    with Timer() as t:
-        avg = zonal_stat.mean()
-    print("time: %s" % t)
-    print(avg)
+    pass

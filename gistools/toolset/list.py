@@ -31,7 +31,4 @@ def split_list_by_index(alist, indices, include=False):
 
 
 if __name__ == '__main__':
-    import numpy as np
-    test = np.array([5,8,9,3,4,7,5,10,2,9])
-    g = split_list_by_index(test, [0, 7], include=True)
-    print(g)
+    pass

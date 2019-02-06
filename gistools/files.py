@@ -5,16 +5,12 @@
 More detailed description.
 """
 
-# import
-
 # __all__ = []
 # __version__ = '0.1'
 import os
-from tempfile import mkstemp, mktemp, gettempdir
+from tempfile import mkstemp, gettempdir
 
-from osgeo import ogr
-
-from utils.check import isfile
+from gistools.utils.check.type import isfile
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

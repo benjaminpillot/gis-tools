@@ -4,7 +4,7 @@ with open("README.md", 'r') as fh:
     long_description = fh.read()
 
 setup(name='gis_tools',
-      version='0.15.01',
+      version='0.15.3',
       description='Some geographical tools for Python developers',
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -12,6 +12,6 @@ setup(name='gis_tools',
       author='Benjamin Pillot',
       author_email='benjaminpillot@riseup.net',
       license='GNU GPL v3.0',
-      packages=['gistools', 'utils', 'utils.check', 'utils.sys', 'toolset', 'examples', 'examples.topography',
-                'examples.zonal_stat'],
+      packages=['gistools', 'gistools.utils', 'gistools.utils.check', 'gistools.utils.sys', 'gistools.toolset',
+                'gistools.examples'],
       zip_safe=False)

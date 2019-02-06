@@ -19,10 +19,11 @@ from osgeo import gdal, ogr, osr
 
 from gistools.coordinates import GeoGrid
 from gistools.projections import proj4_from
-from utils.check import check_type, type_assert
 
 # __all__ = []
 # __version__ = '0.1'
+from gistools.utils.check.type import check_type, type_assert
+
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'

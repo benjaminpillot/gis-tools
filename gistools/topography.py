@@ -174,7 +174,7 @@ def get_isometric_latitude(latitude, e):
 
 
 if __name__ == "__main__":
-    from utils.sys.timer import Timer
+    from gistools.utils import Timer
     from gistools.raster import DigitalElevationModel
     from matplotlib import pyplot as plt
     _dem = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_38_04/srtm_38_04.tif", no_data_value=-32768)

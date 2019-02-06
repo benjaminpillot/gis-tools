@@ -14,6 +14,7 @@ import copy
 import numpy as np
 from osgeo import gdal, ogr
 from scipy.interpolate import RegularGridInterpolator
+from matplotlib import pyplot as plt
 
 from gistools.coordinates import GeoGrid
 from gistools.conversion import raster_to_array, array_to_raster
@@ -22,7 +23,9 @@ from gistools.files import RasterTempFile, ShapeTempFile
 from gistools.layer import PolygonLayer
 from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
 from gistools.surface import compute_surface
-from utils.check import check_type, collection_type_assert, type_assert, protected_property, check_string, isfile
+from gistools.utils.check.type import check_type, collection_type_assert, type_assert, isfile
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.value import check_string
 
 __all__ = ["RasterMap", "DigitalElevationModel"]
 __version__ = '0.1'
@@ -772,14 +775,4 @@ class DigitalElevationModel(RasterMap):
 
 
 if __name__ == '__main__':
-    from matplotlib import pyplot as plt
-    raster = RasterMap("/home/benjamin/Documents/Data/Resource rasters/Solar maps/Monthly GHI sum/monthly_GHI_02.tif",
-                       no_data_value=-9999)
-    polygons = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar GHI/"
-                            "pv_polygons_contour.geojson").to_crs(epsg=4326)
-    layer = raster.contour(0.04, False).polygonize("zone_ghi").to_crs(epsg=4326).singlepart_to_multipart("zone_ghi")
-    layer.to_file("/home/benjamin/Documents/QGIS files/contour.shp")
-    layer = layer.clean_geometry()
-    ax = layer.plot(attribute="zone_ghi", cmap="OrRd", legend=True)
-    polygons.plot(ax=ax)
-    plt.show()
+    pass

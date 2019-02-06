@@ -14,7 +14,7 @@ __email__ = 'benjaminpillot@riseup.net'
 
 import os
 import re
-from utils.check import check_type
+from gistools.utils import check_type
 
 
 def find_file(file: str, directory: str = os.getcwd(), sort=True) -> list:

@@ -6,10 +6,11 @@ More detailed description.
 """
 
 import math
+import os
+
 import pyproj
 
 import numpy as np
-import os
 import warnings
 import geopandas as gpd
 from abc import ABCMeta, abstractmethod
@@ -19,12 +20,15 @@ from pyproj import Proj
 from rtree import index
 
 from gistools.projections import proj4_from_raster
-from utils.sys.reader import read_hdr
-from utils.check import *
 from gistools.exceptions import GeoGridError, GeoGridWarning
 
 # __all__ = ["Ellipsoid", "GeoGrid", "LocationBase", "Location", "TIME_ZONE"]
 # __version__ = '0.1'
+from gistools.utils.check.descriptor import CheckedMeta, BoundedFloat, Float, RangeFloat, CollectionOfBoundedFloats, \
+    CollectionOfFloats, CollectionOfRangeFloats, protected_property
+from gistools.utils.check.type import type_assert, check_type, is_iterable
+from gistools.utils.check.value import check_string, check_file
+from gistools.utils.sys.reader import read_hdr
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
