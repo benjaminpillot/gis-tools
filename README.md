@@ -19,6 +19,7 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` pyproj >= 1.9.5 ``
 * `` rasterio >= 0.36.0 ``
 * `` rtree >= 0.8.3 ``
+* `` scipy >= 1.1.0 ``
 * `` shapely >= 1.6.4 ``
 
 
