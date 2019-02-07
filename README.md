@@ -26,7 +26,7 @@ In theory, it should run with any equal or earlier version of the following libr
 
 
 ## Install
-Be careful when you install GisTools dependencies. If you're not sure about it, prefer the conda installation which should take care of everything for you, except ``cpc.geogrids`` and ``nxmetis`` whose installation is described below.
+Be careful when you install GisTools dependencies. If you're not sure about it, prefer the conda installation which should take care of everything for you, except ``cpc.geogrids`` and ``elevation`` whose installation is described below.
 
 ### Using PyPi
 
