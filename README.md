@@ -44,14 +44,14 @@ $ conda install -c benjaminpillot gis_tools
 
 **Note:** 
 
-Installing __cpc.geogrids__ dependency
+Installing ``cpc.geogrids`` dependency
 ```
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
 $ make install
 ```
 
-Installing __elevation__ dependency (optional, only useful for downloading DEM tile from SRTM online databases)
+Installing ``elevation`` dependency (optional, only useful for downloading DEM tile from SRTM online databases)
 ```
 $ pip install elevation
 ```
