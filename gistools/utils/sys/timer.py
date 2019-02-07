@@ -11,7 +11,6 @@ import sys
 import time
 from functools import wraps
 
-import progressbar as pb
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
@@ -152,7 +151,9 @@ class Timer:
 
 
 class ProgressBar:
+
     def __init__(self, max_value, start_description, description_max_size, carriage_return):
+        import progressbar as pb
         self.description_max_size = description_max_size
         self.start_description = start_description
         if carriage_return:
