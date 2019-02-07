@@ -16,6 +16,7 @@ In theory, it should run with any equal or earlier version of the following libr
 * `` numpy >= 1.14.3 ``
 * `` metis == 0.2a4``
 * `` pandas >= 0.23.4``
+* `` progressbar >= 3.38.0``
 * `` pyproj >= 1.9.5 ``
 * `` rasterio >= 0.36.0 ``
 * `` rtree >= 0.8.3 ``
