@@ -173,13 +173,3 @@ class ProgressBar:
 def countdown(n):
     while n > 0:
         n -= 1
-
-
-if __name__ == '__main__':
-    test = ProgressBar(5, "test", 20, False)
-    time.sleep(1)
-    test.update_description("salut")
-    time.sleep(2)
-    test.update_description("Blabla")
-    time.sleep(2)
-

@@ -5,7 +5,7 @@
 More detailed description.
 """
 
-from gistools.utils import check_file
+from gistools.utils.check.value import check_file
 import numpy as np
 import os
 
@@ -75,9 +75,3 @@ def read_img(img_file: str):
     image = image.reshape((img_info["x_size"], img_info["y_size"]))
 
     return {"image": image, "attributes": img_info}
-
-
-if __name__ == "__main__":
-    imgfile = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Monthly solar maps French Guyana/Irr_Total_GHI.img"
-    result = read_img(imgfile)
-    print(result)

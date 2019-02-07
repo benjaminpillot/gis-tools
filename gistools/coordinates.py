@@ -281,7 +281,7 @@ class GeoGrid(Geogrid):
             raise GeoGridError("Invalid indexing")
 
     @staticmethod
-    def from_geo_file(geo_file: str, res, buffer_accuracy=1, to_crs: str=''):
+    def from_geo_file(geo_file: str, res, buffer_accuracy=1, to_crs: str = ''):
         """ Get geo grid from existing geo file (such as shapefile)
 
         :param geo_file: path to geo file (e.g. shapefile)
@@ -423,9 +423,3 @@ def r_tree_idx(geometry_collection):
         idx.insert(i, geom.bounds)
 
     return idx
-
-
-if __name__ == '__main__':
-    ellps = Ellipsoid("WGS84")
-    print(ellps.model)
-

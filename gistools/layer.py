@@ -1130,13 +1130,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
-if __name__ == '__main__':
-    # _layer = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar PV/result.geojson")
-    _layer_1 = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar GHI/"
-                            "pv_polygons_permissive.geojson")
-    _layer = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp")
-    test = [n[0] for n in _layer_1.intersects(_layer)]
-    print(test)
-

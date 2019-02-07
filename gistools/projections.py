@@ -148,14 +148,3 @@ def wkt_from(proj):
     :return:
     """
     return srs_from(proj).ExportToWkt()
-
-
-if __name__ == "__main__":
-    solar_map = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Resource rasters/Monthly solar maps French " \
-                          "Guyana/Irr_Total_GHI.img"
-    parc_amazonien = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp"
-    proj_parc = ogr.Open(parc_amazonien)
-    proj_parc = proj_parc.GetLayer().GetSpatialRef().ExportToProj4()
-    proj_raster = proj4_from_raster(solar_map)
-    test = is_equal(proj_parc, proj_raster)
-    print(proj_parc, proj_raster, test)

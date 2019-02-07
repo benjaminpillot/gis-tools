@@ -123,7 +123,3 @@ def weight_std(values, weights):
     average = np.average(values, weights=weights)
     variance = np.average((values - average)**2, weights=weights)
     return msqrt(variance)
-
-
-if __name__ == '__main__':
-    pass

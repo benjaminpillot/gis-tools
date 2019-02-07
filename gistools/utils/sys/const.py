@@ -35,9 +35,3 @@ class Frozen(object):
 
 def freeze(value):
     return Frozen(value)
-
-
-if __name__ == "__main__":
-    test = [2, 3, 4]
-    test = freeze(test)
-    test[1] = 10

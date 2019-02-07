@@ -88,7 +88,3 @@ class GeoLayerWarning(Warning):
 
 class PolygonLayerWarning(GeoLayerWarning):
     pass
-
-
-if __name__ == "__main__":
-    pass

@@ -8,7 +8,7 @@ error(s) if necessary
 import os
 from collections import Collection
 
-from gistools.utils import check_type, isfile, type_assert
+from gistools.utils.check.type import check_type, isfile, type_assert
 
 # __all__ = ['check_string', 'check_file', 'check_sub_collection_in_collection']
 __version__ = '0.1'

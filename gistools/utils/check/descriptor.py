@@ -273,7 +273,3 @@ class PairTupleOfNumeric(TupleOfNumeric, PairTuple):
 
 class String(Typed):
     expected_type = str
-
-
-if __name__ == '__main__':
-    pass

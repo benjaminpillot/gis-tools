@@ -90,7 +90,3 @@ def plot_geolayer(gl, ax=None, attribute=None, layer_label: str=None, layer_colo
     ax.handles = handles
 
     return ax
-
-
-if __name__ == "__main__":
-    pass

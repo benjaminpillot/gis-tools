@@ -11,7 +11,6 @@ import warnings
 from tempfile import NamedTemporaryFile
 
 import numpy as np
-import geopandas as gpd
 import rasterio
 from rasterio import features
 from rasterio.transform import Affine
@@ -51,7 +50,7 @@ def slope_to_layer(dem, threshold, min_connection=1, simplify_tolerance=0, is_8_
     return layer
 
 
-def shape_to_raster(shapefile: str, raster_file: str, geo_grid: GeoGrid, geo_crs: str="WGS84", burn_value=1,
+def shape_to_raster(shapefile: str, raster_file: str, geo_grid: GeoGrid, geo_crs: str = "WGS84", burn_value=1,
                     no_data_value=0):
     """ Convert shape to raster
 
@@ -98,7 +97,7 @@ def shape_to_raster(shapefile: str, raster_file: str, geo_grid: GeoGrid, geo_crs
     return 0
 
 
-def shape_to_array(shapefile: str, geo_grid: GeoGrid, geo_crs: str="WGS84"):
+def shape_to_array(shapefile: str, geo_grid: GeoGrid, geo_crs: str = "WGS84"):
     """ Convert shape to numpy array
 
     Write shape to array using 1s
@@ -245,19 +244,3 @@ def raster_to_array(raster_file: str):
         raise error
     else:
         return source_ds.ReadAsArray()
-
-
-if __name__ == '__main__':
-    from matplotlib import pyplot as plt
-    vector_fn = "/home/benjamin/ownCloud/Post-doc Guyane/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp"
-    raster_fn = '/home/benjamin/ownCloud/Post-doc Guyane/temp_raster.tif'
-    raster_fn2 = '/home/benjamin/ownCloud/Post-doc Guyane/temp_raster2.tif'
-    # geo = GeoGrid.from_geo_file(vector_fn, 100, 1)
-    geo = GeoGrid(ll_corner=(2, -55), ur_corner=(6, -51), res=0.05)
-    test = gpd.read_file(vector_fn)
-    test['burn_value'] = 1
-    geopandas_to_raster(test, raster_fn, 'burn_value', geo)
-    test = shape_to_array(vector_fn, geo)
-    array_to_raster(raster_fn2, test, geo)
-    plt.imshow(test)
-    plt.show()

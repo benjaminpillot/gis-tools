@@ -14,7 +14,6 @@ from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point
 from shapely.ops import cascaded_union, linemerge
-from matplotlib import pyplot as plt
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
@@ -580,37 +579,3 @@ def split_polygon_collection(polygon_collection, threshold, method="katana", get
 
     # Return only Polygon geometries (use "explode" function)
     return new_collection
-
-
-if __name__ == "__main__":
-    from gistools.layer import PolygonLayer
-    from geopandas import GeoDataFrame
-
-    layer = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Parc amazonien/enp_pn_s_973.shp")
-    # layer = layer.to_crs(crs={'proj': 'cea'})
-    # abox = box(0, 0, 2000, 2000)
-    polygon_ = layer.geometry[3]
-    # poly_collection = katana_centroid(polygon_, 50000000/16)
-
-    poly_collection = partition_polygon(polygon_, 50000000, weight_attr="area",
-                                        disaggregation_factor=20, precision=100, recursive=False, contig=True,
-                                        iptype="node", rtype="sep2sided", ncuts=10)
-    new_layer = PolygonLayer(GeoDataFrame(geometry=poly_collection, crs=layer.crs))
-    new_layer = new_layer.to_crs(epsg=32622)
-
-    shape_index = []
-    for nn, poly_ in enumerate(poly_collection):
-        shape_index.append(shape_factor(poly_, True))
-        print("area=%.2f, shape index=%.2f" % (poly_.area, shape_factor(poly_, True)))
-
-    # print("mean shape index = %.2f" % np.mean(shape_index))
-
-    new_layer["attr"] = np.random.randint(1000, size=(len(new_layer),))
-    new_layer.plot(attribute="attr")
-    plt.show()
-
-    # split_box = katana_centroid(abox, 5000)
-
-    # g = polygon_collection_to_graph(split_box)
-
-    # print(g.edges)

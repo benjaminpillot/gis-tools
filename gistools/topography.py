@@ -171,20 +171,3 @@ def get_isometric_latitude(latitude, e):
     term_2 = ((1 - e * np.sin(latitude)) / (1 + e * np.sin(latitude))) ** (e / 2)
 
     return np.log(term_1 * term_2)
-
-
-if __name__ == "__main__":
-    from gistools.utils import Timer
-    from gistools.raster import DigitalElevationModel
-    from matplotlib import pyplot as plt
-    _dem = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_38_04/srtm_38_04.tif", no_data_value=-32768)
-    _dem = _dem.to_crs(4326)
-    with Timer() as t:
-        test = get_horizon(42, 9, _dem, distance=0.2, precision=5)
-    print("time: %s" % t)
-    with Timer() as t:
-        for _ in range(20):
-            test = get_horizon(42, 9, _dem, distance=0.2, precision=5)
-    print("time: %s" % t)
-    plt.plot(test["azimuth"], test["elevation"])
-    plt.show()

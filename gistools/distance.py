@@ -102,14 +102,3 @@ def compute_distance(x1, y1, x2, y2, geoproj: str, ellipsoid_model: Ellipsoid):
         raise ValueError("Projection {} has not been defined yet".format(geoproj))
 
     return distance
-
-
-if __name__ == '__main__':
-    from gistools.coordinates import GeoGrid, Ellipsoid
-    from matplotlib import pyplot
-    geo_file = '/home/benjamin/ownCloud/Post-doc Guyane/Data/Cartes administratives/admin-departement.shp'
-    geo = GeoGrid.adapt_to_geo_file(geo_file, 0.01, 0.1)
-    lon, lat = -53, 4.5
-    dist = compute_distance(lon, lat, geo.longitude_mesh, geo.latitude_mesh, 'latlon', Ellipsoid("wgs84"))
-    pyplot.figure(1)
-    pyplot.imshow(dist)

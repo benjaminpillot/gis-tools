@@ -75,9 +75,3 @@ class RasterTempFile:
     def __del__(self):
         if isfile(self.path):
             os.remove(self.path)
-
-
-if __name__ == "__main__":
-    temp_file1 = GeoJSonTempFile()
-    temp_file2 = GeoJSonTempFile()
-    print(temp_file1)

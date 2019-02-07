@@ -772,7 +772,3 @@ class DigitalElevationModel(RasterMap):
     def from_cgiar_website():
         pass
     # TODO: develop a method to retrieve DEM tile(s) from CGIAR website
-
-
-if __name__ == '__main__':
-    pass

@@ -99,8 +99,8 @@ def check_type(*args) -> None:
     if len(args) % 2 == 0:
         for item in range(0, len(args), 2):
             if not isinstance(args[item], args[item + 1]):
-                raise TypeError("Type of argument {} is {} but must be {}".format(item//2 + 1, type(args[item]),
-                                                                                  args[item + 1]))
+                raise TypeError("Type of argument {} is '{}' but must be '{}'".format(
+                    item//2 + 1, type(args[item]).__name__, args[item + 1].__name__))
 
 
 def check_type_in_collection(collection: Collection, _type, include: bool = True) -> None:
@@ -170,10 +170,3 @@ def is_property(obj, attribute):
         return isinstance(type(obj).__getattribute__(obj, attribute), property)
     except AttributeError:
         return False
-
-
-if __name__ == "__main__":
-    from gistools.network import Road
-    from gistools.layer import GeoLayer
-    road = Road("/home/benjamin/Documents/Post-doc Guyane/Data/Geo layers/Road network/main_road_network.shp")
-    check_type(road, GeoLayer)

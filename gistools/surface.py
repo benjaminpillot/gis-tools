@@ -92,18 +92,3 @@ def pixel_overlap_area(centroid1, centroid2, res1, res2, geoproj: str, ellipsoid
     overlapping_area[np.isclose(x_overlap, 0) | np.isclose(y_overlap, 0)] = 0
 
     return overlapping_area
-
-
-if __name__ == "__main__":
-    from gistools.coordinates import GeoGrid
-    geo = GeoGrid((40, 5), (41, 6), 0.1)
-    geo2 = GeoGrid((40, 5), (41, 6), 0.03)
-
-    centroid_2 = (geo2.longitude, geo2.latitude)
-
-    for (longitude, latitude) in zip(np.nditer(geo.longitude), np.nditer(geo.latitude)):
-        centroid_1 = (longitude, latitude)
-        overlap_area = pixel_overlap_area(centroid_1, centroid_2, geo.res, geo2.res, "latlon", Ellipsoid("wgs84"))
-
-    print("Overlap area = {}".format(overlap_area))
-    # print("Surface ratio = {}".format(overlap_area/surface_pixel_2))

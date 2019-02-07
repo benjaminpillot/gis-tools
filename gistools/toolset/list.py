@@ -28,7 +28,3 @@ def split_list_by_index(alist, indices, include=False):
     else:
         indices = sorted([idx for idx in indices if 0 < idx < len(alist)])
         return [alist[i:j] for i, j in zip([0] + indices, indices + [None])]
-
-
-if __name__ == '__main__':
-    pass
