@@ -6,6 +6,7 @@ Toolset for working with static raster/array maps,
 defined as matrices of cell values lying on a
 geo-referenced grid
 """
+
 import pyproj
 import warnings
 from functools import wraps
@@ -13,12 +14,11 @@ import copy
 
 import numpy as np
 from osgeo import gdal, ogr
-from scipy.interpolate import RegularGridInterpolator
 from matplotlib import pyplot as plt
 
 from gistools.coordinates import GeoGrid
 from gistools.conversion import raster_to_array, array_to_raster
-from gistools.exceptions import RasterMapError, GeoGridError
+from gistools.exceptions import RasterMapError, GeoGridError, DigitalElevationModelError
 from gistools.files import RasterTempFile, ShapeTempFile
 from gistools.layer import PolygonLayer
 from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
@@ -51,17 +51,6 @@ def return_new_instance(method):
         return new_self
     return _return_new_instance
 
-
-# decorator_with_args = lambda decorator: lambda *args, **kwargs: lambda func: decorator(func, *args, **kwargs)
-
-# GDAL decorator for gdal-based methods
-# def gdal_decorator(method):
-#     @wraps(method)
-#     def _gdal_decorator(self, *args, **kwargs):
-#         with RasterTempFile() as out_raster:
-#             method(self, out_raster, *args, **kwargs)
-#             return self.__class__(out_raster, no_data_value=self.no_data_value)
-#     return _gdal_decorator
 
 def gdal_decorator(no_data_value=None):
     def decorate(method):
@@ -242,6 +231,8 @@ class RasterMap:
         :param no_limit: no limit for disaggregation (default=False)
         :return:
         """
+        from scipy.interpolate import RegularGridInterpolator
+
         upper_limit = np.inf if no_limit else 10**8 / (self.geo_grid.num_x * self.geo_grid.num_y)
         if 1 < factor <= upper_limit:
             new_geo_grid = self.geo_grid.to_res(self.res/factor)
@@ -769,6 +760,39 @@ class DigitalElevationModel(RasterMap):
             gdal.DEMProcessing(out_raster, src_ds, 'aspect')
 
     @staticmethod
-    def from_cgiar_website():
-        pass
-    # TODO: develop a method to retrieve DEM tile(s) from CGIAR website
+    @type_assert(bounds=tuple, product=str, margin=(int, float))
+    def from_online_srtm_database(bounds, path_to_dem_file=None, product="SRTM1", margin=0):
+        """ Import DEM tile from SRTM3 or SRTM1 online dataset
+
+        Based on "elevation" module. Be careful that at the moment, SRTM3 product
+        does not seem to work properly.
+        :param bounds:
+        :param path_to_dem_file:
+        :param product: "SRTM1" or "SRTM3"
+        :param margin: margin (in %) around DEM
+        :return:
+        """
+        from subprocess import CalledProcessError
+        import os
+        import tempfile
+        import elevation
+
+        try:
+            check_string(product, {'SRTM1', 'SRTM3'})
+        except ValueError as e:
+            raise DigitalElevationModelError("Invalid product name '%s': %s" % (product, e))
+
+        if path_to_dem_file is None:
+            path_to_dem_file = os.path.join(tempfile.gettempdir(), elevation.DEFAULT_OUTPUT)
+
+        try:
+            elevation.clip(bounds, output=path_to_dem_file, margin="%s" % (margin/100), product=product)
+        except CalledProcessError as e:
+            raise DigitalElevationModelError("Internal subprocess error: %s" % e)
+        except (ValueError, TypeError, KeyError) as e:
+            raise DigitalElevationModelError("Invalid input argument: %s" % e)
+
+        # Return instance of DigitalElevationModel
+        return DigitalElevationModel(path_to_dem_file, no_data_value=-32768)
+
+    # TODO: develop a method to retrieve DEM tile(s) from CGIAR website (SRTM3)
