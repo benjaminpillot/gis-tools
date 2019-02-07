@@ -70,9 +70,10 @@ Use ``DigitalElevationModel``, ``PolygonLayer`` and ``ZonalStatistics`` classes 
 ```
 
 ### Example 2
+
+Retrieve layer of polygons corresponding to contour values in raster
 ```
 >>> raster = RasterMap("path/to/raster.tif", no_data_value=-9999)
->>> polygons = PolygonLayer("path/to/polygon.shp").to_crs(epsg=4326)
 >>> layer = raster.contour(0.04, False).polygonize("attribute name").to_crs(epsg=4326)
 ```
 
