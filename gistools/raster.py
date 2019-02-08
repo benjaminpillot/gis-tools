@@ -867,12 +867,3 @@ def _download_srtm_tile(tile_name):
     archive.close()
 
     return os.path.join(temp_srtm_dir, tif_name)
-
-
-if __name__ == "__main__":
-    # test = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_36_03/srtm_36_03.tif")
-    # test2 = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_37_03/srtm_37_03.tif")
-    # output_test = DigitalElevationModel.merge(test, test2)
-    test = DigitalElevationModel.from_cgiar_online_database((8, 38, 14, 42))
-    test.plot()
-    plt.show()
