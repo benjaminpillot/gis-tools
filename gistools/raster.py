@@ -6,9 +6,16 @@ Toolset for working with static raster/array maps,
 defined as matrices of cell values lying on a
 geo-referenced grid
 """
+from rasterio import open as rasterio_open
+from rasterio.merge import merge as rasterio_merge
+from urllib.error import URLError
+from urllib.request import urlretrieve
+from zipfile import ZipFile
 
 import pyproj
 import warnings
+import os
+import tempfile
 from functools import wraps
 import copy
 
@@ -34,6 +41,10 @@ __copyright__ = 'Copyright 2018, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
 
 gdal.UseExceptions()
+
+
+CGIAR_URL = "http://srtm.csi.cgiar.org/wp-content/uploads/files/srtm_5x5/TIFF"
+DEFAULT_OUTPUT = os.path.join(tempfile.gettempdir(), "out.tif")
 
 
 # Decorator for returning new instance of RasterMap
@@ -335,15 +346,6 @@ class RasterMap:
         """
         return np.nanmean(self.raster_array)
 
-    def merge(self, *args):
-        """ Merge several RasterMap instances
-
-        :param args: RasterMap class instance(s)
-        :return:
-        """
-        # TODO: use gdal merge method
-        pass
-
     def min(self):
         """ Return minimum value of raster
 
@@ -484,6 +486,27 @@ class RasterMap:
             self.to_file(self._raster_file)
 
         return self._raster_file
+
+    @classmethod
+    def merge(cls, list_of_raster, bounds=None):
+        """ Merge several RasterMap instances
+
+        :param list_of_raster: list of RasterMap class instance(s)
+        :param bounds: bounds of the output RasterMap
+        :return:
+        """
+        # TODO: use gdal merge method
+        list_of_datasets = []
+        for raster_map in list_of_raster:
+            list_of_datasets.append(rasterio_open(raster_map.raster_file, 'r'))
+
+        # Merge using rasterio
+        array, transform = rasterio_merge(list_of_datasets, bounds=bounds)
+        with RasterTempFile() as file:
+            with rasterio_open(file, 'w', driver="GTiff", height=array.shape[1], width=array.shape[2], count=1,
+                               dtype=array.dtype, crs=list_of_raster[0].crs, transform=transform) as out_dst:
+                out_dst.write(array.squeeze(), 1)
+            return cls(file, no_data_value=list_of_raster[0].no_data_value)
 
     def __getitem__(self, key):
         try:
@@ -761,7 +784,7 @@ class DigitalElevationModel(RasterMap):
 
     @staticmethod
     @type_assert(bounds=tuple, product=str, margin=(int, float))
-    def from_online_srtm_database(bounds, path_to_dem_file=None, product="SRTM1", margin=0):
+    def from_online_srtm_database(bounds, path_to_dem_file=DEFAULT_OUTPUT, product="SRTM1", margin=0):
         """ Import DEM tile from SRTM3 or SRTM1 online dataset
 
         Based on "elevation" module. Be careful that at the moment, SRTM3 product
@@ -773,17 +796,12 @@ class DigitalElevationModel(RasterMap):
         :return:
         """
         from subprocess import CalledProcessError
-        import os
-        import tempfile
         import elevation
 
         try:
             check_string(product, {'SRTM1', 'SRTM3'})
         except ValueError as e:
             raise DigitalElevationModelError("Invalid product name '%s': %s" % (product, e))
-
-        if path_to_dem_file is None:
-            path_to_dem_file = os.path.join(tempfile.gettempdir(), elevation.DEFAULT_OUTPUT)
 
         try:
             elevation.clip(bounds, output=path_to_dem_file, margin="%s" % (margin/100), product=product)
@@ -796,3 +814,65 @@ class DigitalElevationModel(RasterMap):
         return DigitalElevationModel(path_to_dem_file, no_data_value=-32768)
 
     # TODO: develop a method to retrieve DEM tile(s) from CGIAR website (SRTM3)
+    @staticmethod
+    def from_cgiar_online_database(bounds, margin=0, max_tiles=4):
+        """ Import DEM tile from CGIAR-CSI SRTM3 database (V4.1)
+
+        :param bounds:
+        :param margin:
+        :param max_tiles: max number of tiles to download
+        :return:
+        """
+        srtm_lon = np.arange(-180, 185, 5)
+        srtm_lat = np.arange(60, -65, -5)
+        bounds = (bounds[0] - (bounds[2] - bounds[0]) * margin/100, bounds[1] - (bounds[3] - bounds[1]) * margin/100,
+                  bounds[2] + (bounds[2] - bounds[0]) * margin/100, bounds[3] + (bounds[3] - bounds[1]) * margin/100)
+        x_min, x_max = np.digitize(bounds[0], srtm_lon, right=True), np.digitize(bounds[2], srtm_lon, right=True)
+        y_min, y_max = np.digitize(bounds[3], srtm_lat), np.digitize(bounds[1], srtm_lat)
+
+        if (x_max - x_min) * (y_max-y_min) > max_tiles:
+            raise DigitalElevationModelError("Too much tiles to download (>%d)" % max_tiles)
+
+        list_of_tiles = []
+
+        for x in range(int(x_min), int(x_max) + 1):
+            for y in range(int(y_min), int(y_max) + 1):
+                tile_temp_file = _download_srtm_tile("srtm_%02d_%02d" % (x, y))
+                list_of_tiles.append(DigitalElevationModel(tile_temp_file, no_data_value=-32768))
+
+        # Merge DEMs
+        return DigitalElevationModel.merge(list_of_tiles, bounds)
+
+
+def _download_srtm_tile(tile_name):
+    """ Download and extract SRTM tile archive
+
+    :param tile_name:
+    :return:
+    """
+    zip_name, tif_name = tile_name + ".zip", tile_name + '.tif'
+    url = os.path.join(CGIAR_URL, zip_name)
+    temp_srtm_zip = os.path.join(tempfile.gettempdir(), zip_name)
+    temp_srtm_dir = os.path.join(tempfile.gettempdir(), tile_name)
+
+    # Download tile
+    try:
+        urlretrieve(url, temp_srtm_zip)
+    except URLError as e:
+        raise RuntimeError("Unable to fetch data at '%s': %s" % (url, e))
+
+    # Extract GeoTiff
+    archive = ZipFile(temp_srtm_zip, 'r')
+    archive.extractall(temp_srtm_dir)
+    archive.close()
+
+    return os.path.join(temp_srtm_dir, tif_name)
+
+
+if __name__ == "__main__":
+    # test = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_36_03/srtm_36_03.tif")
+    # test2 = DigitalElevationModel("/home/benjamin/Documents/Data/DEM/srtm_37_03/srtm_37_03.tif")
+    # output_test = DigitalElevationModel.merge(test, test2)
+    test = DigitalElevationModel.from_cgiar_online_database((8, 38, 14, 42))
+    test.plot()
+    plt.show()
