@@ -818,8 +818,8 @@ class DigitalElevationModel(RasterMap):
     def from_cgiar_online_database(bounds, margin=0, max_tiles=4):
         """ Import DEM tile from CGIAR-CSI SRTM3 database (V4.1)
 
-        :param bounds:
-        :param margin:
+        :param bounds: bounds of the image --> (x_min, y_min, x_max, y_max)
+        :param margin: margin (in %) around DEM
         :param max_tiles: max number of tiles to download
         :return:
         """
