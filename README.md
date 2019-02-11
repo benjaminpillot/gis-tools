@@ -26,23 +26,13 @@ In theory, it should run with any equal or earlier version of the following libr
 
 
 ## Install
-Pip installation will install required dependencies except ``cpc.geogrids`` whose installation is described below.
+Pip installation should normally take care of everything for you.
 
 ### Using PyPi
 
 The easiest may to install GisTools is using ``pip`` in a terminal
 ```
 $ pip install gis_tools
-```
-
-
-**Note:** 
-
-Installing ``cpc.geogrids`` dependency. CPC geogrids has been developed by the NOAA. See https://noaa-nws-cpc.github.io/cpc.geogrids/
-```
-$ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
-$ cd cpc.geogrids/
-$ make install
 ```
 
 
