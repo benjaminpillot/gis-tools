@@ -26,35 +26,25 @@ In theory, it should run with any equal or earlier version of the following libr
 
 
 ## Install
-Be careful when you install GisTools dependencies. If you're not sure about it, prefer the conda installation which should take care of everything for you, except ``cpc.geogrids`` and ``elevation`` whose installation is described below.
+Pip installation will install required dependencies except ``cpc.geogrids`` whose installation is described below.
 
 ### Using PyPi
 
-You may install GisTools using ``pip`` in a terminal
+The easiest may to install GisTools is using ``pip`` in a terminal
 ```
 $ pip install gis_tools
 ```
 
-### Using conda
-
-GisTools is also installable through Anaconda
-```
-$ conda install -c benjaminpillot gis_tools
-```
 
 **Note:** 
 
-Installing ``cpc.geogrids`` dependency
+Installing ``cpc.geogrids`` dependency. CPC geogrids has been developed by the NOAA. See https://noaa-nws-cpc.github.io/cpc.geogrids/
 ```
 $ git clone https://github.com/noaa-nws-cpc/cpc.geogrids
 $ cd cpc.geogrids/
 $ make install
 ```
 
-Installing ``elevation`` dependency (optional, only useful for downloading DEM tile from SRTM online databases)
-```
-$ pip install elevation
-```
 
 ## Examples
 
