@@ -1,2 +1,8 @@
+# Egg
+*.egg-info
+
+# Distribution
+dist
+
 # Ignore pycharm files
 .idea
