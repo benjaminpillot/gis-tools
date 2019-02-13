@@ -22,8 +22,6 @@ from rtree import index
 from gistools.projections import proj4_from_raster
 from gistools.exceptions import GeoGridError, GeoGridWarning
 
-# __all__ = ["Ellipsoid", "GeoGrid", "LocationBase", "Location", "TIME_ZONE"]
-# __version__ = '0.1'
 from gistools.utils.check.descriptor import CheckedMeta, BoundedFloat, Float, RangeFloat, CollectionOfBoundedFloats, \
     CollectionOfFloats, CollectionOfRangeFloats, protected_property
 from gistools.utils.check.type import type_assert, check_type, is_iterable
@@ -33,6 +31,8 @@ from gistools.utils.sys.reader import read_hdr
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
+# __all__ = ["Ellipsoid", "GeoGrid", "LocationBase", "Location", "TIME_ZONE"]
+# __version__ = '0.1'
 
 
 REF_ELLIPSOID = pyproj.pj_ellps
