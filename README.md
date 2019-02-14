@@ -13,6 +13,7 @@ GisTools allows some of the following operations:
 - [x] Downloading DEM from online databases
 - [x] Extract raster statistics with respect to vector layers (polygon/line)
 - [x] Raster to/from polygons conversion 
+- [x] Compute horizon obstruction from DEM
 
 
 ## Requirements
