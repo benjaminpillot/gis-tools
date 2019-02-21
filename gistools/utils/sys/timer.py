@@ -66,21 +66,6 @@ def trigger_event(name, description, level=None, no_time=None):
         pass
 
 
-def progress(max_value, start_description="Initiating", description_max_size=30, carriage_return=False):
-
-    progress.step = getattr(progress, "step", 0)
-    progress_bar = ProgressBar(max_value, start_description, description_max_size, carriage_return)
-
-    @event("update_description")
-    def update_description(description):
-        progress_bar.update(progress.step, description)
-
-    @event("update_value")
-    def update_value(description):
-        progress.step += 1
-        progress_bar.update(progress.step, description)
-
-
 def display_progress(description_max_size=50, description_title="Running job", time_title="Elapsed time"):
 
     print(description_title + (description_max_size - len(description_title)) * " " + "| " + time_title)
@@ -148,27 +133,6 @@ class Timer:
 
     def __str__(self):
         return "%.3f s" % self.elapsed
-
-
-class ProgressBar:
-
-    def __init__(self, max_value, start_description, description_max_size, carriage_return):
-        import progressbar as pb
-        self.description_max_size = description_max_size
-        self.start_description = start_description
-        if carriage_return:
-            cr = '\n'
-        else:
-            cr = ''
-        self.widgets = [pb.FormatCustomText('%(label)s%(space)s', dict(label=self.start_description,
-                        space=(max(self.description_max_size - len(self.start_description), 1)*" "))),
-                        ' ', pb .Percentage(), pb.Bar(), pb.Timer(), cr]
-        self.progress_bar = pb.ProgressBar(widgets=self.widgets).start(max_value)
-
-    def update(self, value, description):
-        self.widgets[0].update_mapping(label=description,
-                                       space=(max(self.description_max_size - len(description), 1) * " "))
-        self.progress_bar.update(value)
 
 
 def countdown(n):
