@@ -4,7 +4,7 @@ with open("README.md", 'r') as fh:
     long_description = fh.read()
 
 setup(name='gis_tools',
-      version='0.15.42',
+      version='0.15.43',
       description='Some geographical tools for Python developers',
       long_description=long_description,
       long_description_content_type="text/markdown",
@@ -21,7 +21,6 @@ setup(name='gis_tools',
                         "networkx>=2.1",
                         "numpy>=1.14.3",
                         "pandas>=0.23.4",
-                        "progressbar2>=3.38.0",
                         "pyproj>=1.9.5",
                         "rasterio>=0.36.0",
                         "rtree>=0.8.3",
