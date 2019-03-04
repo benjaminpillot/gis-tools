@@ -12,3 +12,6 @@ __copyright__ = 'Copyright 2017, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
 
 # import
+from gistools.utils.check.type import *
+from gistools.utils.check.value import *
+from gistools.utils.check.descriptor import *
