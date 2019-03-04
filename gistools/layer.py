@@ -524,17 +524,19 @@ class GeoLayer:
         :param how:
         :return:
         """
-        from pandas import concat
         check_type(other, PolygonLayer)
         how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
+        from shapely.ops import cascaded_union
 
         idx = r_tree_idx(other.geometry)
         new_geom = []
         if how == "intersection":
+            from pandas import concat
             outdf = gpd.GeoDataFrame(columns=list(self.attributes()) + list(other.attributes()), crs=self.crs)
-            for i, row in self.iterrows():
+            for _, row in self.iterrows():
                 is_intersecting = intersects(row.geometry, other.geometry, idx)
-                new_geom.extend([row.geometry.intersection(geom) for geom in other.geometry[is_intersecting]])
+                new_geom.extend([row.geometry.intersection(cascaded_union([geom for geom in other.geometry[
+                    is_intersecting]]))])
                 df = gpd.GeoDataFrame(columns=self._gpd_df.columns)
                 if any(is_intersecting):
                     other_layer = other[is_intersecting]
@@ -543,10 +545,11 @@ class GeoLayer:
 
         elif how == "difference":
             outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
-            for i, row in self.iterrows():
+            for _, row in self.iterrows():
                 is_intersecting = intersects(row.geometry, other.geometry, idx)
                 if any(is_intersecting):
-                    diff_result = explode([row.geometry.difference(geom) for geom in other.geometry[is_intersecting]])
+                    diff_result = explode([row.geometry.difference(cascaded_union([geom for geom in other.geometry[
+                        is_intersecting]]))])
                     new_geom.extend(diff_result)
                     if len(diff_result) > 0:
                         outdf = outdf.append([row] * len(diff_result), ignore_index=True)
@@ -557,8 +560,8 @@ class GeoLayer:
         else:
             outdf = self._gpd_df.copy()
 
-        if len(outdf) == 0:
-            raise PolygonLayerError("Resulting layer is empty")
+        # if len(outdf) == 0:
+        #     raise GeoLayerError("Resulting layer is empty")
 
         outdf = outdf.drop(columns=["geometry"])
         outdf.geometry = new_geom
@@ -1031,6 +1034,22 @@ class LineLayer(GeoLayer):
 
         outdf.geometry = geometry
         return outdf
+
+        # outdf = gpd.GeoDataFrame(columns=by)
+        # geometry = []
+        # set_of_values = set([tuple([row[name] for name in by]) for _, row in self.iterrows()])
+        #
+        # for value in set_of_values:
+        #     true = np.full(len(self), True)
+        #     for attr, val in zip(by, value):
+        #         true = true & (self[attr] == val)
+        #     new_geom = merge(self._gpd_df.geometry[true].values)
+        #     geometry.extend(new_geom)
+        #     outdf = outdf.append(len(new_geom) * [gpd.GeoSeries(index=by, data=value)], ignore_index=True)
+        #
+        # outdf.geometry = geometry
+        #
+        # return outdf
 
     def radius_of_curvature(self, n):
         """ Compute road's radius of curvature
