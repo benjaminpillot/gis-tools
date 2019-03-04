@@ -25,23 +25,22 @@ from geopandas.io.file import infer_schema
 from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
 from gistools.coordinates import GeoGrid, r_tree_idx
-from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, PolygonLayerError, \
-    PolygonLayerWarning, GeoLayerEmptyError
+from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, \
+    PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
     partition_polygon, shape_factor
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
-from gistools.utils.check.descriptor import protected_property
-from gistools.utils.check.type import check_type, type_assert
+from gistools.utils.check import check_type, check_string, type_assert, protected_property
+from gistools.utils.check.value import check_sub_collection_in_collection
 
 # __all__ = []
 # __version__ = '0.1'
-from gistools.utils.check.value import check_string, check_sub_collection_in_collection
 
 __author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2017, Benjamin Pillot'
+__copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
 
 
@@ -229,6 +228,18 @@ class GeoLayer:
         :return:
         """
         return self._gpd_df.convex_hull
+
+    @return_new_instance
+    def dissolve(self, by=None, aggfunc='first', as_index=False):
+        """
+
+        :param by:
+        :param aggfunc:
+        :param as_index:
+        :return:
+        """
+
+        return self._gpd_df.dissolve(by=by, aggfunc=aggfunc, as_index=as_index)
 
     def distance(self, other):
         """ Get min distance to other layer
@@ -458,29 +469,22 @@ class GeoLayer:
         of geo layer
         :param other:
         :param buffer_distance:
-        :return: numpy array with shape = (length(self), length(other)) such as
-        cell(n, m) stands for distance between element n of layer and element m
-        of other. If element m is not a nearest neighbor, NaN is returned
+        :return: list of new layers of the same class as other
         """
         check_proj(self.crs, other.crs)
 
         buffered_layer = self.buffer(buffer_distance)
+        nearest_neighbors = []
 
         # Use Rtree to speed up !
         idx = r_tree_idx(other.geometry)
 
-        nearest_neighbors = np.full((len(self), len(other)), np.nan)
-
         for i, buffer_geom in enumerate(buffered_layer.geometry):
-            list_of_intersecting_features = list(idx.intersection(buffer_geom.bounds))
-            buffer_intersects = [buffer_geom.intersects(other.geometry[f]) for f in list_of_intersecting_features]
-            if any(buffer_intersects):
-                list_of_buffer_intersecting_features = [f for i, f in enumerate(list_of_intersecting_features) if
-                                                        buffer_intersects[i]]
-                distance = []
-                for feature in list_of_buffer_intersecting_features:
-                    distance.append(self.geometry[i].distance(other.geometry[feature]))
-                nearest_neighbors[i, [f for f in list_of_buffer_intersecting_features]] = [d for d in distance]
+            is_intersecting = intersects(buffer_geom, other.geometry, idx)
+            if any(is_intersecting):
+                nearest_neighbors.append(other[is_intersecting])
+            else:
+                nearest_neighbors.append(None)
 
         return nearest_neighbors
 
@@ -511,6 +515,55 @@ class GeoLayer:
         # Careful !! Do not return sorted result as each entry
         # corresponds to point in layer "points" in ascending order
         return result
+
+    @return_new_instance
+    def overlay(self, other, how):
+        """ Apply overlay geometry operation from another PolygonLayer
+
+        :param other:
+        :param how:
+        :return:
+        """
+        from pandas import concat
+        check_type(other, PolygonLayer)
+        how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
+
+        idx = r_tree_idx(other.geometry)
+        new_geom = []
+        if how == "intersection":
+            outdf = gpd.GeoDataFrame(columns=list(self.attributes()) + list(other.attributes()), crs=self.crs)
+            for i, row in self.iterrows():
+                is_intersecting = intersects(row.geometry, other.geometry, idx)
+                new_geom.extend([row.geometry.intersection(geom) for geom in other.geometry[is_intersecting]])
+                df = gpd.GeoDataFrame(columns=self._gpd_df.columns)
+                if any(is_intersecting):
+                    other_layer = other[is_intersecting]
+                    df = df.append([row] * len(other_layer), ignore_index=True)
+                    outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+
+        elif how == "difference":
+            outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
+            for i, row in self.iterrows():
+                is_intersecting = intersects(row.geometry, other.geometry, idx)
+                if any(is_intersecting):
+                    diff_result = explode([row.geometry.difference(geom) for geom in other.geometry[is_intersecting]])
+                    new_geom.extend(diff_result)
+                    if len(diff_result) > 0:
+                        outdf = outdf.append([row] * len(diff_result), ignore_index=True)
+                else:
+                    new_geom.append(row.geometry)
+                    outdf = outdf.append(row, ignore_index=True)
+
+        else:
+            outdf = self._gpd_df.copy()
+
+        if len(outdf) == 0:
+            raise PolygonLayerError("Resulting layer is empty")
+
+        outdf = outdf.drop(columns=["geometry"])
+        outdf.geometry = new_geom
+
+        return outdf
 
     def project(self, other):
         """ Project layer geometry onto other geometry
@@ -875,55 +928,6 @@ class PolygonLayer(GeoLayer):
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, idx) for geom in self.geometry])
 
     @return_new_instance
-    def overlay(self, other, how):
-        """ Apply overlay geometry operation from another PolygonLayer
-
-        :param other:
-        :param how:
-        :return:
-        """
-        from pandas import concat
-        check_type(other, PolygonLayer)
-        how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
-
-        idx = r_tree_idx(other.geometry)
-        new_geom = []
-        if how == "intersection":
-            outdf = gpd.GeoDataFrame(columns=list(self.attributes()) + list(other.attributes()), crs=self.crs)
-            for i, row in self.iterrows():
-                is_intersecting = intersects(row.geometry, other.geometry, idx)
-                new_geom.extend([row.geometry.intersection(geom) for geom in other.geometry[is_intersecting]])
-                df = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                if any(is_intersecting):
-                    other_layer = other[is_intersecting]
-                    df = df.append([row] * len(other_layer), ignore_index=True)
-                    outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
-
-        elif how == "difference":
-            outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
-            for i, row in self.iterrows():
-                is_intersecting = intersects(row.geometry, other.geometry, idx)
-                if any(is_intersecting):
-                    diff_result = explode([row.geometry.difference(geom) for geom in other.geometry[is_intersecting]])
-                    new_geom.extend(diff_result)
-                    if len(diff_result) > 0:
-                        outdf = outdf.append([row] * len(diff_result), ignore_index=True)
-                else:
-                    new_geom.append(row.geometry)
-                    outdf = outdf.append(row, ignore_index=True)
-
-        else:
-            outdf = self._gpd_df.copy()
-
-        if len(outdf) == 0:
-            raise PolygonLayerError("Resulting layer is empty")
-
-        outdf = outdf.drop(columns=["geometry"])
-        outdf.geometry = new_geom
-
-        return outdf
-
-    @return_new_instance
     def partition(self, threshold, weight_attr="area", disaggregation_factor=16, metric_precision=100, recursive=False,
                   **metis_options):
         """
@@ -1000,6 +1004,33 @@ class LineLayer(GeoLayer):
         # Check geometry
         if self._geom_type != 'Line':
             raise LineLayerError("Geometry of LineLayer must be 'Line' but is '{}'".format(self._geom_type))
+
+    @return_new_instance
+    def merge(self, by):
+        """ Merge lines with respect to attribute
+
+        Use dissolve method and merge results to get merely
+        LineString objects
+        :param by: name of attribute or list of attribute names
+        :return:
+        """
+        from shapely.ops import linemerge
+        new_df = self._gpd_df.dissolve(by=by, as_index=False)
+        outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
+        geometry = []
+
+        for _, row in new_df.iterrows():
+            new_geom = linemerge(row.geometry)
+            try:
+                geometry.extend(new_geom)
+                to_append = [row] * len(new_geom)
+            except TypeError:
+                geometry.append(new_geom)
+                to_append = row
+            outdf = outdf.append(to_append, ignore_index=True)
+
+        outdf.geometry = geometry
+        return outdf
 
     def radius_of_curvature(self, n):
         """ Compute road's radius of curvature
