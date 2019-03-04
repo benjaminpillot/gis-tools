@@ -12,12 +12,12 @@ import networkx as nx
 
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
-    Point
+    Point, MultiLineString
 from shapely.ops import cascaded_union, linemerge
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
-from gistools.utils.check.value import check_string
+from gistools.utils.check import check_string
 from gistools.utils.check.type import is_iterable, type_assert
 
 __author__ = 'Benjamin Pillot'
@@ -175,6 +175,7 @@ def fishnet(polygon, threshold):
     :param threshold:
     :return:
     """
+    # TODO: implement fishnet split operation
     pass
 
 
@@ -219,7 +220,7 @@ def join(geometry_collection):
     if not is_iterable(geometry_collection):
         raise TypeError("Input must be a collection but is '{}'".format(type(geometry_collection)))
 
-    while "There is still polygons to aggregate":
+    while "There is still geometries to aggregate":
 
         joint = []
         idx = r_tree_idx(geometry_collection)
@@ -249,9 +250,6 @@ def join(geometry_collection):
             geometry_collection = joint
         else:
             break
-
-    # Be sure union has not created multi-part geometries
-    joint = explode(joint)
 
     return joint
 
@@ -394,10 +392,24 @@ def mask(polygon_collection, mask_collection, fast_intersection_surface):
                 result.append(geom)
 
     # No multipolygons and join overlapping ones
-    result = explode(result)
+    # result = explode(result)
     result = join(result)
+    result = explode(result)
 
     return result
+
+
+def merge(line_collection):
+    """ Merge connected lines
+
+    :param line_collection:
+    :return:
+    """
+    # Merge MultiLinestring objects returned by the "join" function
+    merged_line = [linemerge(line) if isinstance(line, MultiLineString) else line for line in join(line_collection)]
+
+    # Keep only single parts
+    return explode(merged_line)
 
 
 def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, precision, recursive, **metis_options):
@@ -553,6 +565,47 @@ def shared_area_among_collection(polygon: Polygon, polygon_collection, normalize
             polygon_collection)]
 
 
+def split_collection(collection, threshold, method, get_explode):
+    """ Split geometry collection
+
+    :param collection:
+    :param threshold:
+    :param method:
+    :param get_explode:
+    :return:
+    """
+    if not is_iterable(collection):
+        raise TypeError("Geometry must be a collection")
+
+    new_collection = []
+
+    for geom in collection:
+        try:
+            new_collection.extend(method(collection, threshold))
+        except TopologicalError:
+            new_collection.append(geom)
+
+    if get_explode:
+        new_collection = explode(new_collection)
+
+    # Return new collection
+    return new_collection
+
+
+def split_line_collection(line_collection, threshold, method="cut", get_explode=False):
+    """
+
+    :param line_collection:
+    :param threshold:
+    :param method:
+    :param get_explode:
+    :return:
+    """
+    split_method = {'cut': cut}
+
+    return split_collection(line_collection, threshold, split_method[method], get_explode)
+
+
 def split_polygon_collection(polygon_collection, threshold, method="katana", get_explode=False):
     """ Split a collection of polygons
 
@@ -562,20 +615,6 @@ def split_polygon_collection(polygon_collection, threshold, method="katana", get
     :param get_explode:
     :return: new polygon collection with only Polygon geometries (no MultiPolygon geometries)
     """
-    if not is_iterable(polygon_collection):
-        raise TypeError("Polygon geometry must be a collection")
-
     split_method = {'katana': katana, 'katana_centroid': katana_centroid}
-    new_collection = []
 
-    for i, polygon in enumerate(polygon_collection):
-        try:
-            new_collection.extend(split_method[method](polygon, threshold))
-        except TopologicalError:
-            new_collection.append(polygon)
-
-    if get_explode:
-        new_collection = explode(new_collection)
-
-    # Return only Polygon geometries (use "explode" function)
-    return new_collection
+    return split_collection(polygon_collection, threshold, split_method[method], get_explode)
