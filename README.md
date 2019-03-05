@@ -39,9 +39,9 @@ In theory, it should run with any equal or earlier version of the following libr
 ## Install
 Pip installation should normally take care of everything for you.
 
-### Using PyPi
+### Using PIP
 
-The easiest may to install GisTools is using ``pip`` in a terminal
+The easiest way to install GisTools is using ``pip`` in a terminal
 ```
 $ pip install gis_tools
 ```
