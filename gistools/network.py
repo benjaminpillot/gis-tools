@@ -7,14 +7,17 @@ More detailed description.
 
 # __all__ = []
 # __version__ = '0.1'
+from abc import abstractmethod
 
 import networkx as nx
 import numpy as np
-import geopandas as gpd
+from geopandas import GeoDataFrame
 from shapely.geometry import Point, LineString
+from shapely.ops import linemerge
 
 from gistools.coordinates import r_tree_idx
 from gistools.exceptions import EdgeError, NetworkError, RoadError, RoadNodeError
+from gistools.geometry import connect_lines_to_point, centroid, intersects
 from gistools.layer import return_new_instance, LineLayer, PointLayer
 from gistools.toolset.list import split_list_by_index
 from gistools.utils.check.descriptor import protected_property
@@ -32,6 +35,48 @@ np.seterr(divide='ignore')
 # Constants
 SPEED_RATIO = {'m/s': 1, 'km/h': 3.6}
 TIME_FORMAT = {'s': 1, 'm': 1/60, 'h': 1/3600}
+
+
+def _multi_edges(graph):
+    """ Return multiple edges between 2 nodes
+
+    :return: list of edge IDs that connect the same nodes
+    """
+    multi_edges = []
+    for node in graph.nodes():
+        for neighbor in graph.neighbors(node):
+            if graph.number_of_edges(node, neighbor) > 1:
+                edge_id = [i for i in graph[node][neighbor]]
+                if edge_id not in multi_edges:
+                    multi_edges.append(edge_id)
+
+    return multi_edges
+
+
+def _remote_edges(graph):
+    """ Return remote edges
+
+    Remote edges are not connected to anything
+    :return: list of edge IDs that are remote
+    """
+    remote_edges = []
+    for u, v in graph.edges():
+        if len(list(graph.neighbors(u))) == 1 and len(list(graph.neighbors(v))) == 1:
+            remote_edges.extend(list(graph[u][v]))
+
+    return remote_edges
+
+
+def _self_loops(graph):
+    """ Return self-loop edges
+
+    :return: list of edge IDs that are self-loops
+    """
+    self_loops = []
+    for self_loop in nx.selfloop_edges(graph, keys=True):
+        self_loops.append(self_loop[2])
+
+    return self_loops
 
 
 def find_all_disconnected_edges_and_fix(edges, tolerance, method):
@@ -71,11 +116,16 @@ class Edge(LineLayer):
 
         # Set Edge specific attributes
         if "direction" not in self.attributes():
-            self._gpd_df["direction"] = [self.DEFAULT_DIRECTION] * len(self)  # Set default direction (not directed)
+            self["direction"] = self.DEFAULT_DIRECTION
+            # self._gpd_df["direction"] = [self.DEFAULT_DIRECTION] * len(self)  # Set default direction (not directed)
 
         # Simplified edges
         self._from_to = [((geom.coords.xy[0][0], geom.coords.xy[1][0]), (geom.coords.xy[0][-1], geom.coords.xy[1][
             -1])) for geom in self.geometry]
+
+        # Corresponding undirected multi-graph
+        self._graph = nx.MultiGraph()
+        self._graph.add_edges_from([(from_to[0], from_to[1], _id) for _id, from_to in enumerate(self.from_to)])
 
         # Override point layer class attribute (To Edge is associated Node)
         self._point_layer_class = Node
@@ -99,9 +149,7 @@ class Edge(LineLayer):
         :return:
         """
         method = check_string(method, {'reconnect_and_delete', 'reconnect_and_keep', 'delete'})
-        undirected_graph = nx.MultiGraph()
-        undirected_graph.add_edges_from([(from_to[0], from_to[1]) for from_to in self.from_to])
-        sub_graphs = list(nx.connected_component_subgraphs(undirected_graph))
+        sub_graphs = list(nx.connected_component_subgraphs(self._graph))
         main_component = max(sub_graphs, key=len)
         sub_graphs.remove(main_component)
 
@@ -126,7 +174,7 @@ class Edge(LineLayer):
     @return_new_instance
     def get_path(self, path):
 
-        edge_path = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
+        edge_path = GeoDataFrame(columns=self.attributes(), crs=self.crs)
 
         for i in range(len(path) - 1):
             try:
@@ -138,16 +186,46 @@ class Edge(LineLayer):
 
         return edge_path
 
+    def get_end_nodes(self):
+        """ Get end nodes of edges
+
+        Get end nodes, that is edge's end that does not connect
+        to another edge
+        :return: Node layer and list of edge IDs
+        """
+        end = [(node, list(self._graph.edges(node, keys=True))[0]) for node in self._graph.nodes() if len(
+            self._graph.edges(node)) == 1]
+        return self._point_layer_class.from_gpd(geometry=[Point(n[0]) for n in end], crs=self.crs),\
+            [n[1][2] for n in end]
+
     def get_nodes(self):
         """ Get nodes from edges
 
         :return:
         """
-        from_node = [coords[0] for coords in self._from_to]
-        to_node = [coords[1] for coords in self._from_to]
+        return self._point_layer_class.from_gpd(geometry=[Point(node) for node in self._graph.nodes()], crs=self.crs)
 
-        return self._point_layer_class(
-            gpd.GeoDataFrame(geometry=[Point(coord) for coord in list(set(from_node + to_node))], crs=self.crs))
+    def get_multi_edges(self):
+        """ Get multiple edges between 2 nodes
+
+        :return: list of edge IDs that connect the same nodes
+        """
+        return _multi_edges(self._graph)
+
+    def get_remote_edges(self):
+        """ Get remote edges
+
+        Remote edges are not connected to anything
+        :return: list of edge IDs that are remote
+        """
+        return _remote_edges(self._graph)
+
+    def get_self_loops(self):
+        """ Get self-loop edges
+
+        :return: list of edge IDs that are self-loops
+        """
+        return _self_loops(self._graph)
 
     @return_new_instance
     def get_simplified(self):
@@ -159,6 +237,83 @@ class Edge(LineLayer):
         """
         outdf = self._gpd_df.copy()
         outdf.geometry = [LineString(from_to) for from_to in self._from_to]
+
+        return outdf
+
+    def get_single_edges(self):
+        """ Get single edges
+
+        Retrieve single edges, that is from intersection to intersection.
+        Typically, when a node has only 2 neighbors, the corresponding
+        edges can be merged into a new one.
+        :return: list of list of edge IDs representing unique elements
+        """
+        to_merge = []
+        all_connected_edges = []
+
+        for u, v, edge_id in self._graph.edges(keys=True):
+            if edge_id not in all_connected_edges:
+                connected_nodes = [u, v]
+                connected_edges = [edge_id]
+                for node in [u, v]:
+                    previous_node = node
+                    while "There are neighbors to connect":
+                        next_node = [n for n in self._graph.neighbors(previous_node) if n not in connected_nodes]
+                        if not next_node or len(next_node) > 1:
+                            break
+                        else:
+                            connected_edges.extend(list(self._graph[previous_node][next_node[0]]))
+                            connected_nodes.extend(next_node)
+                            previous_node = next_node[0]  # previous node is now the next node in the chain
+
+                all_connected_edges.extend(connected_edges)
+                to_merge.append(connected_edges)
+
+        return to_merge
+
+    @return_new_instance
+    def merge2(self):
+        """ Merge edges from intersection to intersection
+
+        Merge with respect to single entities, that is from
+        intersecting node to intersecting node (node with
+        more than 2 neighbors).
+        :return:
+        """
+        single_edges = self.get_single_edges()
+        outdf = GeoDataFrame(columns=self.attributes(), crs=self.crs)
+        geometry, rows = [], []
+
+        for line in single_edges:
+            geometry.append(linemerge(self.geometry[line].values))
+            rows.append(self._gpd_df.iloc[line[-1]])
+
+        outdf = outdf.append(rows)
+        outdf.geometry = geometry
+
+        return outdf
+
+    @return_new_instance
+    def reconnect(self, tolerance):
+        """ Reconnect disconnected edges with respect to tolerance
+
+        :param tolerance: min distance for reconnection
+        :return:
+        """
+        outdf = self._gpd_df.copy()
+        nodes, edge_idx = self.get_end_nodes()
+        nearest_nodes, node_idx = nodes.nearest_neighbors(nodes, tolerance)
+        connected_nodes = []
+
+        for n, n_nodes in enumerate(nearest_nodes):
+            n_idx = [node for node in node_idx[n] if node not in connected_nodes]
+            if len(n_idx) > 1:
+                e_idx = [edge_idx[i] for i in n_idx]
+                connected_nodes.extend([i for i in n_idx if i not in connected_nodes])
+                # Use outdf.geometry to ensure that changes are saved
+                new_geometry = connect_lines_to_point(outdf.geometry[e_idx], centroid(n_nodes.geometry))
+                for edge, geom in zip(e_idx, new_geometry):
+                    outdf.loc[edge, "geometry"] = geom
 
         return outdf
 
@@ -176,6 +331,17 @@ class Edge(LineLayer):
             if direction_dic[key] not in ['two-ways', 'one-way', 'reverse', None]:
                 raise EdgeError("'%s' is not a valid direction value" % direction_dic[key])
             self._gpd_df.loc[self[attribute_name] == key, "direction"] = direction_dic[key]
+
+    def split_at_ending_edges(self):
+        """ Split edge on which ends another edge
+
+        :return:
+        """
+        nodes, edge_idx = self.get_end_nodes()
+        splitting_nodes = nodes[[True if intersects(geom, self.geometry, self.r_tree_idx).count(True) > 1 else False for
+                                 geom in nodes.geometry]]
+
+        return self.split_at_points(splitting_nodes)
 
     def split_at_underlying_points(self, location, *args):
         """ Override parent class method
@@ -206,6 +372,14 @@ class Edge(LineLayer):
     def direction(self):
         return self["direction"]
 
+    @property
+    def from_node(self):
+        return [coords[0] for coords in self._from_to]
+
+    @property
+    def to_node(self):
+        return [coords[1] for coords in self._from_to]
+
 
 class Node(PointLayer):
     """ Node class
@@ -220,6 +394,15 @@ class Node(PointLayer):
         :param nodes:
         """
         super().__init__(nodes, *args, **kwargs)
+
+    @type_assert(edges=Edge)
+    def which_edge(self, edges):
+        """ Find to which edge belongs nodes
+
+        :param edges:
+        :return:
+        """
+        return [i for node in self.geometry for i, from_to in enumerate(edges.from_to) if (node.x, node.y) in from_to]
 
 
 class Road(Edge):
@@ -362,6 +545,7 @@ class Network:
     """
     edges = protected_property("edges")
     nodes = protected_property("nodes")
+    _graph = None
 
     def __init__(self, edges, nodes, match_edge_nodes=True, tolerance=1):
         """ Network class constructor
@@ -372,7 +556,6 @@ class Network:
         :param tolerance: distance tolerance for considering nodes and edge nodes the same (in m)
         """
         check_type(edges, Edge, nodes, Node)
-        self._graph = nx.MultiDiGraph()
         self._edges = edges
         self._nodes = nodes
 
@@ -383,60 +566,44 @@ class Network:
             self._nodes["geometry"] = [edge_nodes.geometry[n] for n in nn]
             self._nodes = self._nodes[distance <= tolerance]
 
-    def build_graph(self, weight_one_way=None, weight_return=None):
-        """ Build corresponding graph
+    def _get_nearest_edge_node(self):
+        """ Get nearest node from edge
 
-        :param weight_one_way: array of weight values for edge in one_way direction
-        :param weight_return: array of weight values for edge in reverse direction
         :return:
         """
-        if weight_one_way is None:
-            weight_one_way = self._edges.length
-        if weight_return is None:
-            weight_return = self._edges.length
+        nodes = self._edges.get_nodes()
+        idx = r_tree_idx(nodes.geometry)
+        edge_nodes = []
+        for geom in self.nodes.geometry:
+            nn = list(idx.nearest(geom.bounds, 1))
+            edge_nodes.append(nodes.geometry[nn[0]])
 
-        if len(weight_one_way) != len(self._edges) or len(weight_return) != len(self._edges):
-            raise NetworkError("Input argument(s) must have the same length as network edges")
+        return Node.from_gpd(geometry=edge_nodes, crs=self._edges.crs)
 
-        weight = []
-        from_node = []
-        to_node = []
-        for idx, coords in enumerate(self._edges.from_to):
-            if self._edges.direction[idx] != "reverse":
-                weight.append(weight_one_way[idx])
-                from_node.append(coords[0])
-                to_node.append(coords[1])
-            if self._edges.direction[idx] != "one-way":
-                weight.append(weight_return[idx])
-                from_node.append(coords[1])
-                to_node.append(coords[0])
+    @abstractmethod
+    def build_graph(self, *args, **kwargs):
+        pass
 
-        # Set graph
-        self._graph.clear()
-        self._graph.add_weighted_edges_from([(from_n, to_n, w) for from_n, to_n, w in zip(from_node, to_node, weight)])
+    def get_self_loops(self):
+        """ Get self-loop edges in network
 
-        return self
+        :return: list of edge IDs
+        """
+        return _self_loops(self.graph)
 
-    # TODO: must redefine the following method
-    # def find_disconnected_islands_and_fix(self, tolerance=None, method="delete"):
-    #     """ Find disconnected components in network
-    #
-    #     Find disconnected components/islands graphs in multi-graph
-    #     and apply method (fix/reconnect, keep, delete) with respect
-    #     to a given tolerance
-    #     :param tolerance: tolerance for considering an island "disconnected"
-    #     :param method:
-    #     :return:
-    #     """
-    #     edges = self._edges.copy()
-    #     while "There is still disconnected islands":
-    #         new_edges = edges.find_disconnected_islands_and_fix(tolerance, method)
-    #         if len(new_edges) < len(edges):
-    #             edges = new_edges
-    #         else:
-    #             break
-    #
-    #     return type(self)(new_edges, self._nodes)
+    def get_remote_edges(self):
+        """ Get remote edges in network
+
+        :return: list of edge IDs
+        """
+        return _remote_edges(self.graph)
+
+    def get_multi_edges(self):
+        """ Get multi-edges in network
+
+        :return: list of list of edge IDs
+        """
+        return _multi_edges(self.graph)
 
     def get_minimum_distance_to_network(self, layer):
         """ get minimum distance from given layer to network
@@ -457,7 +624,7 @@ class Network:
         :param node_end: shapely Point
         :return: Edge instance of the path
         """
-        if node_start not in self._nodes.geometry or node_end not in self._nodes.geometry:
+        if node_start not in self.nodes.geometry or node_end not in self.nodes.geometry:
             raise EdgeError("Either source or destination node is invalid")
 
         node_start = (node_start.x, node_start.y)
@@ -467,7 +634,7 @@ class Network:
             return []  # Empty path
 
         try:
-            path = nx.dijkstra_path(self._graph, node_start, node_end)
+            path = nx.dijkstra_path(self.graph, node_start, node_end)
         except nx.NetworkXNoPath:
             print("No available path between node {} and node {}".format(node_start, node_end))
             return None
@@ -495,7 +662,7 @@ class Network:
         else:
             node_start = (node_start.x, node_start.y)
             node_end = (node_end.x, node_end.y)
-            length = nx.dijkstra_path_length(self._graph, node_start, node_end)
+            length = nx.dijkstra_path_length(self.graph, node_start, node_end)
 
         return length
 
@@ -504,14 +671,14 @@ class Network:
 
         :return:
         """
-        return nx.all_pairs_dijkstra_path(self._graph)
+        return nx.all_pairs_dijkstra_path(self.graph)
 
     def get_all_shortest_path_lengths(self):
         """ Get shortest path lengths between all graph nodes
 
         :return:
         """
-        return nx.all_pairs_dijkstra_path_length(self._graph)
+        return nx.all_pairs_dijkstra_path_length(self.graph)
 
     @type_assert(source_node=Point)
     def get_all_shortest_paths_from_source(self, source_node):
@@ -520,12 +687,12 @@ class Network:
         :param source_node:
         :return:
         """
-        if source_node not in self._nodes.geometry:
+        if source_node not in self.nodes.geometry:
             raise NetworkError("Source node is invalid")
 
         source_node = (source_node.x, source_node.y)
 
-        return nx.single_source_dijkstra_path(self._graph, source_node)
+        return nx.single_source_dijkstra_path(self.graph, source_node)
 
     @type_assert(source_node=Point)
     def get_all_shortest_path_lengths_from_source(self, source_node):
@@ -534,12 +701,12 @@ class Network:
         :param source_node:
         :return:
         """
-        if source_node not in self._nodes.geometry:
+        if source_node not in self.nodes.geometry:
             raise NetworkError("Source node is invalid")
 
         source_node = (source_node.x, source_node.y)
 
-        return nx.single_source_dijkstra_path_length(self._graph, source_node)
+        return nx.single_source_dijkstra_path_length(self.graph, source_node)
 
     @type_assert(source_node=Point)
     def get_shortest_paths_from_source(self, source_node, target_nodes):
@@ -592,7 +759,7 @@ class Network:
         starting and ending nodes
         :return:
         """
-        shortest_path = np.full((len(self._nodes), len(self._nodes)), np.nan)
+        shortest_path = np.full((len(self.nodes), len(self.nodes)), np.nan)
         edge_nodes = self._get_nearest_edge_node()
         for i, geom_from in enumerate(edge_nodes.geometry):
             for n, geom_to in enumerate(edge_nodes.geometry):
@@ -607,28 +774,21 @@ class Network:
         :param node_color:
         :return:
         """
-        self._edges.plot(layer_color=edge_color)
-        self._nodes.plot(layer_color=node_color)
+        self.edges.plot(layer_color=edge_color)
+        self.nodes.plot(layer_color=node_color)
 
-    def _get_nearest_edge_node(self):
-        """
-
-        :return:
-        """
-        nodes = self._edges.get_nodes()
-        idx = r_tree_idx(nodes.geometry)
-        edge_nodes = []
-        for geom in self._nodes.geometry:
-            nn = list(idx.nearest(geom.bounds, 1))
-            edge_nodes.append(nodes.geometry[nn[0]])
-
-        edge_nodes = Node(gpd.GeoDataFrame(geometry=edge_nodes, crs=self._edges.crs))
-        return edge_nodes
+    @property
+    def graph(self):
+        if self._graph is None:
+            raise NetworkError("Corresponding graph has not been built")
+        else:
+            return self._graph
 
 
 class RoadNetwork(Network):
     """ Road network class
 
+    Road network is basically a multi-directed graph
     """
 
     roads = protected_property("edges")
@@ -642,6 +802,38 @@ class RoadNetwork(Network):
         check_type(roads, Road, nodes, RoadNode)
 
         super().__init__(roads, nodes, *args, **kwargs)
+
+    def build_graph(self, weight_one_way=None, weight_return=None):
+        """ Build corresponding multi-directed graph
+
+        :param weight_one_way: array of weight values for edge in one_way direction
+        :param weight_return: array of weight values for edge in reverse direction
+        :return:
+        """
+        if weight_one_way is None:
+            weight_one_way = self._edges.length
+        if weight_return is None:
+            weight_return = self._edges.length
+
+        if len(weight_one_way) != len(self._edges) or len(weight_return) != len(self._edges):
+            raise NetworkError("Input argument(s) must have the same length as network edges")
+
+        weight, from_node, to_node = [], [], []
+        for idx, coords in enumerate(self._edges.from_to):
+            if self._edges.direction[idx] != "reverse":
+                weight.append(weight_one_way[idx])
+                from_node.append(coords[0])
+                to_node.append(coords[1])
+            if self._edges.direction[idx] != "one-way":
+                weight.append(weight_return[idx])
+                from_node.append(coords[1])
+                to_node.append(coords[0])
+
+        # Create multi-directed graph
+        self._graph = nx.MultiDiGraph()
+        self._graph.add_weighted_edges_from([(from_n, to_n, w) for from_n, to_n, w in zip(from_node, to_node, weight)])
+
+        return self
 
     def fuel_consumption(self, gross_hp, vehicle_weight, vehicle_frontal_area=7.92, engine_efficiency=0.4,
                          fuel_energy_density=35, uphill_hp=0.8, downhill_hp=0.6, drag_resistance=0.35,
@@ -890,7 +1082,3 @@ class RoadNetwork(Network):
                 n += 1
 
         return t_time, d_a
-
-
-class ElectricalGrid(Network):
-    pass
