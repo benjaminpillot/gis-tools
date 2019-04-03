@@ -7,6 +7,7 @@ More detailed description.
 
 # __all__ = []
 # __version__ = '0.1'
+
 import numpy as np
 import networkx as nx
 
@@ -33,6 +34,35 @@ def add_points_to_line(line, threshold):
     :return:
     """
     return linemerge(cut_(line, threshold))
+
+
+def centroid(point_collection):
+    """ Retrieve centroid of multiple points
+
+    :param point_collection:
+    :return:
+    """
+    x_centroid = np.mean([pt.x for pt in point_collection])
+    y_centroid = np.mean([pt.y for pt in point_collection])
+
+    return Point([x_centroid, y_centroid])
+
+
+def connect_lines_to_point(line_collection, point):
+    """ Connect a set of lines to some point
+
+    :param line_collection:
+    :param point:
+    :return:
+    """
+    new_line_collection = []
+    for line in line_collection:
+        if Point(line.coords[0]).distance(point) < Point(line.coords[-1]).distance(point):
+            new_line_collection.append(LineString(point.coords[:] + line.coords[:]))
+        else:
+            new_line_collection.append(LineString(line.coords[:] + point.coords[:]))
+
+    return new_line_collection
 
 
 def cut(line, threshold, count=0):
@@ -209,6 +239,18 @@ def intersects(geometry, geometry_collection, r_tree=None):
 
     return [False if f not in list_of_intersecting_features else geometry.intersects(geometry_collection[f]) for f in
             range(len(geometry_collection))]
+
+
+def is_line_connected_to(line, geometry_collection):
+    """ Is line connected to one of the geometries in collection ?
+
+    :param line:
+    :param geometry_collection:
+    :return:
+    """
+
+    return [other.intersects(Point(line.coords[0])) for other in geometry_collection], [other.intersects(Point(
+        line.coords[-1])) for other in geometry_collection]
 
 
 def join(geometry_collection):
@@ -565,23 +607,23 @@ def shared_area_among_collection(polygon: Polygon, polygon_collection, normalize
             polygon_collection)]
 
 
-def split_collection(collection, threshold, method, get_explode):
+def split_collection(geometry_collection, threshold, method, get_explode):
     """ Split geometry collection
 
-    :param collection:
+    :param geometry_collection:
     :param threshold:
     :param method:
     :param get_explode:
     :return:
     """
-    if not is_iterable(collection):
+    if not is_iterable(geometry_collection):
         raise TypeError("Geometry must be a collection")
 
     new_collection = []
 
-    for geom in collection:
+    for geom in geometry_collection:
         try:
-            new_collection.extend(method(collection, threshold))
+            new_collection.extend(method(geometry_collection, threshold))
         except TopologicalError:
             new_collection.append(geom)
 
