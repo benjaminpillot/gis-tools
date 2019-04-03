@@ -21,6 +21,7 @@ import copy
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
 from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
+from pandas import concat
 
 from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
@@ -67,7 +68,7 @@ def return_new_instance(method):
     def _return_new_instance(self, *args, **kwargs):
         output = method(self, *args, **kwargs)
         if isinstance(output, gpd.GeoDataFrame):
-            new_self = self.__class__(output, self.name)
+            new_self = self.__class__(output, name=self.name)
             return new_self
         else:
             return output
@@ -132,7 +133,7 @@ class GeoLayer:
 
         # Geo layer must own consistent geometry
         geom_type = {'LineString': "Line", "MultiLineString": "Line", "Polygon": "Polygon", "MultiPolygon":
-                     "Polygon", "Point": "Point"}
+                     "Polygon", "Point": "Point", "MultiPoint": "Point"}
         geometry = [geom_type[geom] for geom in gpd_df["geometry"].type]
         if len(np.unique(geometry)) > 1:
             raise GeoLayerError("Layer geometry must be consistent")
@@ -140,9 +141,10 @@ class GeoLayer:
         # Set attributes
         self._geom_type = geometry[0]
         self._gpd_df = gpd_df
+        # self._r_tree_idx = r_tree_idx(self.geometry)
+        self._r_tree_idx = None  # Set to None at creation (only compute the first time it is called)
         self._point_layer_class = PointLayer  # Point layer class/subclass corresponding to given layer class/subclass
-        self._polygon_layer_class = PolygonLayer  # Polygon layer class/subclass corresponding to given layer
-        # class/subclass
+        self._polygon_layer_class = PolygonLayer  # Corresponding polygon layer class/subclass
         self._line_layer_class = LineLayer  # Line layer class/subclass corresponding to given layer class/subclass
         self.name = name
 
@@ -196,6 +198,15 @@ class GeoLayer:
 
         return self._gpd_df.append(other._gpd_df, ignore_index=True, sort=False)
 
+    @return_new_instance
+    def append_attribute(self, **kwargs):
+        """ Add new attribute to attribute table
+
+        Add attribute using "attribute name"=value keyword format
+        :return:
+        """
+        return self._gpd_df.assign(**kwargs)
+
     @type_assert(distance=(int, float))
     def buffer(self, distance, resolution=16):
         """ Return buffer geometry
@@ -205,33 +216,24 @@ class GeoLayer:
         :param resolution:
         :return: PolygonLayer instance
         """
-        buffer = self._gpd_df.buffer(distance, resolution)
         outdf = self._gpd_df.copy()
-        outdf.geometry = buffer
+        outdf.geometry = self._gpd_df.buffer(distance, resolution)
 
-        return self._polygon_layer_class(outdf, self.name)
+        return self._polygon_layer_class(outdf, name=self.name)
 
     def centroid(self):
-        """
+        """ Get centroid of geometries
 
         :return: PointLayer instance
         """
         outdf = self._gpd_df.copy()
         outdf.geometry = self._gpd_df.centroid
 
-        return self._point_layer_class(outdf, self.name)
-
-    @return_new_instance
-    def convex_hull(self):
-        """ Return convex hull
-
-        :return:
-        """
-        return self._gpd_df.convex_hull
+        return self._point_layer_class(outdf, name=self.name)
 
     @return_new_instance
     def dissolve(self, by=None, aggfunc='first', as_index=False):
-        """
+        """ Dissolve geometry with respect to attribute(s)
 
         :param by:
         :param aggfunc:
@@ -264,7 +266,7 @@ class GeoLayer:
 
     @return_new_instance
     def drop(self, labels=None, axis=0, index=None, attributes=None):
-        """ Drop rows according to labels
+        """ Drop columns/rows according to labels
 
         :param labels:
         :param axis:
@@ -275,6 +277,22 @@ class GeoLayer:
         return self._gpd_df.drop(labels, axis, index, columns=attributes)
 
     @return_new_instance
+    def drop_attribute(self, attr_name):
+        """ Drop attribute
+
+        :param attr_name: attribute name (str or list of str)
+        :return:
+        """
+        attr_name = [attr_name] if isinstance(attr_name, str) else attr_name
+        drop_attr = [attr for attr in attr_name if attr in self.attributes()]
+        out_layer = self.copy()  # No need for building the instance again as it is just dropping
+
+        if drop_attr:
+            out_layer._gpd_df = self._gpd_df.drop(attr_name, axis=1)
+
+        return out_layer
+
+    @return_new_instance
     def explode(self):
         """ Explode "multi" geometry into "single"
 
@@ -283,15 +301,15 @@ class GeoLayer:
         """
         outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
         append_bool = np.full(len(self), False)
-        for idx, row in self.iterrows():
-            if type(row.geometry) == self._geometry_class:
+        for idx, geometry in enumerate(self.geometry):
+            if type(geometry) == self._geometry_class:
                 append_bool[idx] = True
-            if type(row.geometry) == self._multi_geometry_class:
+            if type(geometry) == self._multi_geometry_class:
                 outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
                 append_bool[append_bool] = False
-                multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                multdf = multdf.append([row]*len(row.geometry), ignore_index=True)
-                multdf.geometry = list(row.geometry)
+                # multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
+                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]]*len(geometry), ignore_index=True)
+                multdf.geometry = list(geometry)
                 outdf = outdf.append(multdf, ignore_index=True)
 
         return outdf.append(self._gpd_df[append_bool], ignore_index=True)
@@ -323,8 +341,8 @@ class GeoLayer:
 
         return self._point_layer_class(outdf, self.name)
 
-    def intersects(self, other):
-        """ Does layer intersects with other ?
+    def intersecting_features(self, other):
+        """ Which geometry of other layer does intersect ?
 
         Retrieve which elements of other intersect
         with elements of geo layer (not element-wise)
@@ -333,12 +351,24 @@ class GeoLayer:
         """
         check_type(other, GeoLayer)
         list_of_intersecting_features = []
-        idx = r_tree_idx(other.geometry)
 
         for geom in self.geometry:
-            list_of_intersecting_features.append(intersecting_features(geom, other.geometry, idx))
+            list_of_intersecting_features.append(intersecting_features(geom, other.geometry, other.r_tree_idx))
 
         return list_of_intersecting_features
+
+    def intersects(self, other):
+        """ Does layer intersect with other ? (Not element wise)
+
+        :param other:
+        :return:
+        """
+        check_type(other, GeoLayer)
+        is_intersecting = []
+        for geom in self.geometry:
+            is_intersecting.append(any(intersects(geom, other.geometry, other.r_tree_idx)))
+
+        return is_intersecting
 
     def is_exploded(self):
         """ Test if geometry is "exploded"
@@ -475,18 +505,18 @@ class GeoLayer:
 
         buffered_layer = self.buffer(buffer_distance)
         nearest_neighbors = []
-
-        # Use Rtree to speed up !
-        idx = r_tree_idx(other.geometry)
+        nn_id = []
 
         for i, buffer_geom in enumerate(buffered_layer.geometry):
-            is_intersecting = intersects(buffer_geom, other.geometry, idx)
+            is_intersecting = intersects(buffer_geom, other.geometry, other.r_tree_idx)
             if any(is_intersecting):
                 nearest_neighbors.append(other[is_intersecting])
+                nn_id.append(other.index[is_intersecting])
             else:
                 nearest_neighbors.append(None)
+                nn_id.append(None)
 
-        return nearest_neighbors
+        return nearest_neighbors, nn_id
 
     def nearest_point_in_layer(self, points):
         """ Find nearest points in layer elements
@@ -518,44 +548,53 @@ class GeoLayer:
 
     @return_new_instance
     def overlay(self, other, how):
-        """ Apply overlay geometry operation from another PolygonLayer
+        """ Apply overlay geometry operation from another layer (same dimension or higher)
 
         :param other:
         :param how:
         :return:
         """
-        check_type(other, PolygonLayer)
+        check_proj(self.crs, other.crs)
+
+        if isinstance(self, (PointLayer, LineLayer)):
+            try:
+                check_type(other, (LineLayer, PolygonLayer))
+            except TypeError:
+                raise GeoLayerError("other must be LineLayer or PolygonLayer but is '%s'" % other.__class__)
+        if isinstance(self, PolygonLayer):
+            try:
+                check_type(other, PolygonLayer)
+            except TypeError:
+                raise GeoLayerError("other must be PolygonLayer but is '%s'" % other.__class__)
+
         how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
         from shapely.ops import cascaded_union
 
-        idx = r_tree_idx(other.geometry)
         new_geom = []
         if how == "intersection":
-            from pandas import concat
             outdf = gpd.GeoDataFrame(columns=list(self.attributes()) + list(other.attributes()), crs=self.crs)
-            for _, row in self.iterrows():
-                is_intersecting = intersects(row.geometry, other.geometry, idx)
-                new_geom.extend([row.geometry.intersection(cascaded_union([geom for geom in other.geometry[
-                    is_intersecting]]))])
-                df = gpd.GeoDataFrame(columns=self._gpd_df.columns)
+            for i, geometry in enumerate(self.geometry):
+                is_intersecting = intersects(geometry, other.geometry, other.r_tree_idx)
                 if any(is_intersecting):
+                    new_geom.extend([geometry.intersection(cascaded_union([geom for geom in other.geometry[
+                        is_intersecting]]))])
                     other_layer = other[is_intersecting]
-                    df = df.append([row] * len(other_layer), ignore_index=True)
+                    df = gpd.GeoDataFrame().append([self._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
                     outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
 
         elif how == "difference":
             outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
-            for _, row in self.iterrows():
-                is_intersecting = intersects(row.geometry, other.geometry, idx)
+            for i, geometry in enumerate(self.geometry):
+                is_intersecting = intersects(geometry, other.geometry, other.r_tree_idx)
                 if any(is_intersecting):
-                    diff_result = explode([row.geometry.difference(cascaded_union([geom for geom in other.geometry[
+                    diff_result = explode([geometry.difference(cascaded_union([geom for geom in other.geometry[
                         is_intersecting]]))])
                     new_geom.extend(diff_result)
                     if len(diff_result) > 0:
-                        outdf = outdf.append([row] * len(diff_result), ignore_index=True)
+                        outdf = outdf.append([self._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
                 else:
-                    new_geom.append(row.geometry)
-                    outdf = outdf.append(row, ignore_index=True)
+                    new_geom.append(geometry)
+                    outdf = outdf.append(self._gpd_df.iloc[i], ignore_index=True)
 
         else:
             outdf = self._gpd_df.copy()
@@ -590,30 +629,61 @@ class GeoLayer:
 
         return self._point_layer_class(outdf, self.name)
 
+    def rename(self, attribute_name, new_name):
+        """ Rename attribute in table
+
+        :param attribute_name: str or collection of str
+        :param new_name: str or collection of str
+        :return:
+        """
+        out_layer = self.copy()  # No need to return new instance as it is just renaming
+        attribute_name = [attribute_name] if isinstance(attribute_name, str) else attribute_name
+        new_name = [new_name] if isinstance(new_name, str) else new_name
+        if len(attribute_name) != len(new_name):
+            raise GeoLayerError("Both inputs must have the same length")
+
+        out_layer._gpd_df = out_layer._gpd_df.rename(
+            index=str, columns={attr_name: name for attr_name, name in zip(attribute_name, new_name)})
+
+        return out_layer
+
+    @return_new_instance
     def simplify(self, tolerance=0.2):
         """ Simplify object geometry
 
         :param tolerance:
-        :return: GeoLayer
+        :return: new instance of GeoLayer
         """
-        out_layer = self.copy()
-        out_layer['geometry'] = self.geometry.simplify(tolerance)
-        return out_layer
+        outdf = self._gpd_df.copy()
+        outdf.geometry = outdf.geometry.simplify(tolerance)
+        return outdf
+
+    # TODO: use the 'dissolve' method instead
+    # @return_new_instance
+    # def singlepart_to_multipart(self, attribute):
+    #     """ Convert singlepart to multipart geometry with respect to attribute value
+    #
+    #     :param attribute:
+    #     :return:
+    #     """
+    #     outdf = gpd.GeoDataFrame(columns=[attribute, "geometry"], crs=self.crs)
+    #
+    #     for n, val in enumerate(set(self._gpd_df[attribute])):
+    #         outdf.loc[n, attribute] = val
+    #         outdf.geometry[n] = self._multi_geometry_class([geom for geom in self.geometry[self[attribute] == val]])
+    #
+    #     return outdf
 
     @return_new_instance
-    def singlepart_to_multipart(self, attribute):
-        """ Convert singlepart to multipart geometry with respect to attribute value
+    def sjoin(self, other, op="intersects"):
+        """ Spatial join with another layer
 
-        :param attribute:
-        :return:
+        :param other:
+        :param op:
+        :return: new instance of GeoLayer
         """
-        outdf = gpd.GeoDataFrame(columns=[attribute, "geometry"], crs=self.crs)
-
-        for n, val in enumerate(set(self._gpd_df[attribute])):
-            outdf.loc[n, attribute] = val
-            outdf.geometry[n] = self._multi_geometry_class([geom for geom in self.geometry[self[attribute] == val]])
-
-        return outdf
+        # When doing the spatial join, we drop the "index_right" column added by Geopandas
+        return gpd.sjoin(self._gpd_df, other._gpd_df, how="left", op=op).drop("index_right", axis=1)
 
     @return_new_instance
     def split(self, threshold, method=None, no_multipart=None):
@@ -632,16 +702,16 @@ class GeoLayer:
 
         outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
         append_bool = np.full(len(self), False)
-        for idx, row in self.iterrows():
-            if row.geometry.__getattribute__(self._split_threshold) <= threshold:
+        for idx, geometry in enumerate(self.geometry):
+            if geometry.__getattribute__(self._split_threshold) <= threshold:
                 append_bool[idx] = True
             else:
                 # append_bool[append_bool] = False
                 multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                split_geom = self._split_methods[method](row.geometry, threshold)
+                split_geom = self._split_methods[method](geometry, threshold)
                 if no_multipart:
                     split_geom = explode(split_geom)
-                multdf = multdf.append([row]*len(split_geom), ignore_index=True)
+                multdf = multdf.append([self._gpd_df.iloc[idx]]*len(split_geom), ignore_index=True)
                 multdf.geometry = split_geom
                 outdf = outdf.append(multdf, ignore_index=True)
 
@@ -759,13 +829,16 @@ class GeoLayer:
     def __repr__(self):
         return repr(self._gpd_df)
 
-    # __getitem__ method returns new instance or pandas Series
+    # __getitem__ method returns new instance or pandas Series or inner value
     @return_new_instance
     def __getitem__(self, key):
         try:
             return self._gpd_df[key].copy()  # .copy()
         except KeyError:
-            raise GeoLayerError("'%s' is not a valid attribute" % key)
+            try:
+                return self._gpd_df.loc[key].copy()
+            except KeyError:
+                raise GeoLayerError("Not a valid key/location/index")
 
     def __setitem__(self, key, value):
 
@@ -812,6 +885,14 @@ class GeoLayer:
     def pyproj(self):
         return pyproj.Proj(self._gpd_df.crs)
 
+    # Rtree property: only compute at first call
+    # I'm not sure it is a good practice though...
+    @property
+    def r_tree_idx(self):
+        if self._r_tree_idx is None:
+            self._r_tree_idx = r_tree_idx(self.geometry)
+        return self._r_tree_idx
+
     @property
     def schema(self):
         return infer_schema(self._gpd_df)
@@ -829,15 +910,12 @@ class GeoLayer:
         check_type(other, GeoLayer)
         check_proj(self.crs, other.crs)
 
-        # Use Rtree to speed up !
-        idx = r_tree_idx(other.geometry)
-
         min_dist = np.zeros(len(self))
         nearest_neighbor = np.zeros(len(self), dtype='int')
 
         for i, geom in enumerate(self.geometry):
-            list_of_nearest_features = list(idx.nearest(geom.bounds, 1))
-            list_of_intersecting_features = list(idx.intersection(geom.bounds))
+            list_of_nearest_features = list(other.r_tree_idx.nearest(geom.bounds, 1))
+            list_of_intersecting_features = list(other.r_tree_idx.intersection(geom.bounds))
             is_intersecting = [geom.intersects(other.geometry[f]) for f in list_of_intersecting_features]
             dist = []
             if not any(is_intersecting):
@@ -857,6 +935,16 @@ class GeoLayer:
                         list_of_truly_intersecting_features))]
 
         return min_dist, nearest_neighbor
+
+    @classmethod
+    def from_gpd(cls, *gpd_args, **gpd_kwargs):
+        """ Build layer from geopandas GeoDataFrame arguments
+
+        :param gpd_args: geopandas arguments
+        :param gpd_kwargs: geopandas keyword arguments
+        :return:
+        """
+        return cls(gpd.GeoDataFrame(*gpd_args, **gpd_kwargs))
 
 
 class PolygonLayer(GeoLayer):
@@ -890,10 +978,9 @@ class PolygonLayer(GeoLayer):
         check_type(other, PolygonLayer, attr_name, str, normalized, bool)
         check_proj(self.crs, other.crs)
 
-        idx = r_tree_idx(other.geometry)
         attr_value = {attr: np.zeros(len(self)) for attr in set(other[attr_name])}
         for i, geom in enumerate(self.geometry):
-            area = np.array(shared_area_among_collection(geom, other.geometry, normalized, idx))
+            area = np.array(shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx))
             for val, _area in zip(other[attr_name][area > 0], area[area > 0]):
                 attr_value[val][i] += _area
 
@@ -916,6 +1003,17 @@ class PolygonLayer(GeoLayer):
         else:
             return layer
 
+    @return_new_instance
+    def convex_hull(self):
+        """ Return convex hull
+
+        :return:
+        """
+        outdf = self._gpd_df.copy()
+        outdf.geometry = self._gpd_df.convex_hull
+
+        return outdf
+
     def intersecting_area(self, other, normalized: bool = False):
         """ Return intersecting area with other layer
 
@@ -927,8 +1025,8 @@ class PolygonLayer(GeoLayer):
         check_proj(self.crs, other.crs)
 
         # Return intersecting matrix
-        idx = r_tree_idx(other.geometry)
-        return np.array([shared_area_among_collection(geom, other.geometry, normalized, idx) for geom in self.geometry])
+        return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
+                         self.geometry])
 
     @return_new_instance
     def partition(self, threshold, weight_attr="area", disaggregation_factor=16, metric_precision=100, recursive=False,
@@ -940,19 +1038,19 @@ class PolygonLayer(GeoLayer):
         :param disaggregation_factor: disaggregation before re-aggregating
         :param metric_precision: metric precision for partitioning
         :param recursive:
-        :param metis_options:
+        :param metis_options: optional arguments specific to METIS
         :return:
         """
 
         outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
         append_bool = np.full(len(self), False)
-        for idx, row in self.iterrows():
-            if row.geometry.area > threshold:
+        for idx, geometry in enumerate(self.geometry):
+            if geometry.area > threshold:
                 multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
                 new_geom = partition_polygon(
-                    row.geometry, threshold, weight_attr=weight_attr, disaggregation_factor=disaggregation_factor,
+                    geometry, threshold, weight_attr=weight_attr, disaggregation_factor=disaggregation_factor,
                     precision=metric_precision, recursive=recursive, **metis_options)
-                multdf = multdf.append([row] * len(new_geom), ignore_index=True)
+                multdf = multdf.append([self._gpd_df.iloc[idx]] * len(new_geom), ignore_index=True)
                 multdf.geometry = new_geom
                 outdf = outdf.append(multdf, ignore_index=True)
             else:
@@ -1009,47 +1107,49 @@ class LineLayer(GeoLayer):
             raise LineLayerError("Geometry of LineLayer must be 'Line' but is '{}'".format(self._geom_type))
 
     @return_new_instance
-    def merge(self, by):
+    def linemerge(self, by, method="dissolve"):
         """ Merge lines with respect to attribute
 
         Use dissolve method and merge results to get merely
         LineString objects
         :param by: name of attribute or list of attribute names
+        :param method: {'dissolve', 'join'} method used for merging lines. Either 'dissolve' from GeoPandas library or
+        'join' from greece.gistools.geometry.
         :return:
         """
-        from shapely.ops import linemerge
-        new_df = self._gpd_df.dissolve(by=by, as_index=False)
         outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
         geometry = []
 
-        for _, row in new_df.iterrows():
-            new_geom = linemerge(row.geometry)
-            try:
+        if method == 'dissolve':
+            from shapely.ops import linemerge
+            new_df = self._gpd_df.dissolve(by=by, as_index=False)
+            for idx, geometry in enumerate(new_df.geometry):
+                new_geom = linemerge(geometry)
+                try:
+                    geometry.extend(new_geom)
+                    to_append = [new_df.iloc[idx]] * len(new_geom)
+                except TypeError:
+                    geometry.append(new_geom)
+                    to_append = new_df.iloc[idx]
+                outdf = outdf.append(to_append, ignore_index=True)
+        elif method == 'join':
+            from gistools.geometry import merge
+            if isinstance(by, str):
+                by = [by]
+            set_of_values = set([tuple([row[name] for name in by]) for _, row in self.iterrows()])
+            for value in set_of_values:
+                true = np.full(len(self), True)
+                for attr, val in zip(by, value):
+                    true = true & (self[attr] == val)
+                new_geom = merge(self._gpd_df.geometry[true].values)
                 geometry.extend(new_geom)
-                to_append = [row] * len(new_geom)
-            except TypeError:
-                geometry.append(new_geom)
-                to_append = row
-            outdf = outdf.append(to_append, ignore_index=True)
+                outdf = outdf.append(len(new_geom) * [self._gpd_df[true].iloc[0]], ignore_index=True)
+        else:
+            raise ValueError("Invalid method for merging. Must be either 'dissolve' or 'join' but is '%s'" % method)
 
         outdf.geometry = geometry
-        return outdf
 
-        # outdf = gpd.GeoDataFrame(columns=by)
-        # geometry = []
-        # set_of_values = set([tuple([row[name] for name in by]) for _, row in self.iterrows()])
-        #
-        # for value in set_of_values:
-        #     true = np.full(len(self), True)
-        #     for attr, val in zip(by, value):
-        #         true = true & (self[attr] == val)
-        #     new_geom = merge(self._gpd_df.geometry[true].values)
-        #     geometry.extend(new_geom)
-        #     outdf = outdf.append(len(new_geom) * [gpd.GeoSeries(index=by, data=value)], ignore_index=True)
-        #
-        # outdf.geometry = geometry
-        #
-        # return outdf
+        return outdf
 
     def radius_of_curvature(self, n):
         """ Compute road's radius of curvature
@@ -1115,31 +1215,48 @@ class LineLayer(GeoLayer):
         pass
 
     @return_new_instance
-    def split_at_points(self, points, tolerance=1):
+    def split_at_points(self, points):
         """ Split lines at given points
 
         :param points: PointLayer instance
-        :param tolerance: maximum distance threshold for
-        considering point near enough from line (default: 1m)
         :return:
         """
         check_type(points, PointLayer)
-        distance, nearest_neighbor = points.distance_and_nearest_neighbor(self)
-        out_df = self._gpd_df.copy()
+        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
+        new_geom = []
+        new_rows = []
 
-        multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-        geometry = []
+        for idx, geometry in enumerate(self.geometry):
+            _, intersecting_points = intersecting_features(geometry, points.geometry, points.r_tree_idx)
+            if intersecting_points:
+                geometry = cut_at_points(geometry, intersecting_points)
+                new_geom.extend(geometry)
+                new_rows.extend([self._gpd_df.iloc[idx]] * len(geometry))
+            else:
+                new_geom.append(geometry)
+                new_rows.append(self._gpd_df.iloc[idx])
 
-        for nn in nearest_neighbor:
-            cut_points = points[nearest_neighbor == nn]
-            new_geom = cut_at_points(out_df.geometry[nn], cut_points.geometry)
-            multdf = multdf.append([out_df.iloc[nn]] * len(new_geom), ignore_index=True)
-            geometry.extend(new_geom)
+        outdf = outdf.append(new_rows, ignore_index=True)
+        outdf.geometry = new_geom
 
-        multdf.geometry = geometry
-        out_df = out_df.append(multdf, ignore_index=True)
+        return outdf
 
-        return out_df
+        # distance, nearest_neighbor = points.distance_and_nearest_neighbor(self)
+        # out_df = self._gpd_df.copy()
+        #
+        # multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
+        # geometry = []
+        #
+        # for nn in nearest_neighbor:
+        #     cut_points = points[nearest_neighbor == nn]
+        #     new_geom = cut_at_points(out_df.geometry[nn], cut_points.geometry)
+        #     multdf = multdf.append([out_df.iloc[nn]] * len(new_geom), ignore_index=True)
+        #     geometry.extend(new_geom)
+        #
+        # multdf.geometry = geometry
+        # out_df = out_df.append(multdf, ignore_index=True)
+        #
+        # return out_df
 
     @return_new_instance
     def split_at_underlying_points(self, location):
