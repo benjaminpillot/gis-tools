@@ -11,8 +11,7 @@ __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
 
-# from gistools.coordinates import *
-# from gistools.distance import *
-# from gistools.conversion import *
-# from gistools.network import *
-# from gistools.surface import *
+from gistools.layer import *
+from gistools.raster import *
+from gistools.network import *
+from gistools.stats import *
