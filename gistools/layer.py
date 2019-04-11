@@ -22,6 +22,7 @@ from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString,
 from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from pandas import concat
+from shapely.ops import cascaded_union
 
 from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
@@ -30,7 +31,7 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    partition_polygon, shape_factor
+    partition_polygon, shape_factor, is_in_collection
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
@@ -275,6 +276,20 @@ class GeoLayer:
         :return:
         """
         return self._gpd_df.drop(labels, axis, index, columns=attributes)
+
+    def drop_duplicate_geometries(self):
+        """ Drop duplicate geometries
+
+        Use Rtree spatial index and shapely equals method to get duplicate geometries
+        :return:
+        """
+        duplicate = []
+        r_tree = r_tree_idx(self.geometry)  # Do not use property as we want to delete entries in index
+        for n in range(len(self)):
+            r_tree.delete(n, self.geometry[n].bounds)
+            if is_in_collection(self.geometry[n], self.geometry, r_tree):
+                duplicate.append(n)
+        return self.drop(index=duplicate)
 
     @return_new_instance
     def drop_attribute(self, attr_name):
@@ -568,7 +583,6 @@ class GeoLayer:
                 raise GeoLayerError("other must be PolygonLayer but is '%s'" % other.__class__)
 
         how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
-        from shapely.ops import cascaded_union
 
         new_geom = []
         if how == "intersection":
@@ -1013,6 +1027,46 @@ class PolygonLayer(GeoLayer):
         outdf.geometry = self._gpd_df.convex_hull
 
         return outdf
+
+    def fix_overlap(self):
+        """ Fix overlap polygon geometries
+
+        Return as many layers as necessary where geometries do not overlap
+        :return:
+        """
+        layer = self.copy()
+        outlayers = []
+
+        while "there are overlaps to extract":
+            r_tree = r_tree_idx(layer.geometry)  # No property as we delete entries from Index
+            to_append = []
+            for n in range(len(layer)):
+                r_tree.delete(n, layer.geometry[n].bounds)
+                _, list_of_intersecting_features = intersecting_features(layer.geometry[n], layer.geometry, r_tree)
+                if list_of_intersecting_features:
+                    to_append.append(n)
+
+            if not to_append:
+                outlayers.append(layer)
+                break
+            else:
+                outlayers.append(layer.drop(index=to_append))
+                layer = layer[to_append]
+
+        return tuple(outlayers)
+
+    def has_overlap(self):
+        """ Does layer contain overlaps ?
+
+        :return:
+        """
+        r_tree = r_tree_idx(self.geometry)  # No property as we delete entries from Index
+        for n in range(len(self)):
+            r_tree.delete(n, self.geometry[n].bounds)
+            if any(intersects(self.geometry[n], self.geometry, r_tree)):
+                return True
+
+        return False
 
     def intersecting_area(self, other, normalized: bool = False):
         """ Return intersecting area with other layer
