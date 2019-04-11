@@ -179,6 +179,22 @@ def cut_at_points(line, points):
     return cut_line
 
 
+def is_in_collection(geometry, geometry_collection, r_tree):
+    """ Test if geometry is present in collection (using shapely 'equals' method)
+
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree:
+    :return:
+    """
+    _, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
+    for geom in list_of_intersecting_features:
+        if geometry.equals(geom):
+            return True
+
+    return False
+
+
 def explode(geometry_collection):
     """ Convert multi-part geometry collection into single-part
 
