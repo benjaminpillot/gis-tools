@@ -18,6 +18,7 @@ import geopandas as gpd
 import numpy as np
 import copy
 
+from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
 from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
@@ -290,6 +291,21 @@ class GeoLayer:
             if is_in_collection(self.geometry[n], self.geometry, r_tree):
                 duplicate.append(n)
         return self.drop(index=duplicate)
+
+    @return_new_instance
+    def drop_duplicates(self, *args, **kwargs):
+        """ Drop duplicates
+
+        TODO: it is still troublesome... Not all duplicated rows are dropped
+        Thanks to https://github.com/geopandas/geopandas/issues/521#issuecomment-346808004
+        :return:
+        """
+        outdf = self._gpd_df.copy()
+        outdf["geometry"] = outdf["geometry"].apply(lambda geom: geom.wkb)  # wkb to make geometry hashable
+        outdf = outdf.drop_duplicates(*args, **kwargs)
+        outdf["geometry"] = outdf["geometry"].apply(lambda geom: wkb.loads(geom))
+
+        return outdf
 
     @return_new_instance
     def drop_attribute(self, attr_name):
@@ -1028,8 +1044,8 @@ class PolygonLayer(GeoLayer):
 
         return outdf
 
-    def fix_overlap(self):
-        """ Fix overlap polygon geometries
+    def extract_overlap(self):
+        """ Extract internal overlap polygon geometries
 
         Return as many layers as necessary where geometries do not overlap
         :return:
@@ -1054,6 +1070,43 @@ class PolygonLayer(GeoLayer):
                 layer = layer[to_append]
 
         return tuple(outlayers)
+
+    @return_new_instance
+    def fix_overlap(self, how):
+        """ Fix internal overlap
+
+        :param how:
+        :return:
+        """
+        r_tree = r_tree_idx(self.geometry)
+        new_geometry = []
+        new_rows = []
+        list_of_objects = list(range(len(self)))
+        while list_of_objects:
+            n = list_of_objects.pop(0)
+            r_tree.delete(n, self.geometry[n].bounds)
+            feature_idx, list_of_intersecting_features = intersecting_features(self.geometry[n], self.geometry, r_tree)
+            if list_of_intersecting_features:
+                geom_union = cascaded_union([geometry for geometry in list_of_intersecting_features])
+                if how == "intersection":
+                    geom_result = [self.geometry[n].intersection(geom_union)]
+                elif how == "difference":
+                    geom_result = explode(self.geometry[n].difference(geom_union))
+                else:  # union
+                    geom_result = [self.geometry[n].union(geom_union)]
+                for i, geom in zip(feature_idx, list_of_intersecting_features):
+                    list_of_objects.remove(i)
+                    r_tree.delete(i, geom.bounds)
+            else:
+                geom_result = [self.geometry[n]]
+
+            new_geometry.extend(geom_result)
+            new_rows.extend([self._gpd_df.iloc[n]] * len(geom_result))
+
+        outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs).append(new_rows)
+        outdf.geometry = new_geometry
+
+        return outdf
 
     def has_overlap(self):
         """ Does layer contain overlaps ?
