@@ -327,6 +327,7 @@ class GeoLayer:
     def explode(self):
         """ Explode "multi" geometry into "single"
 
+        Note that this is the faster tested method...
         Thanks to https://gist.github.com/mhweber/cf36bb4e09df9deee5eb54dc6be74d26
         :return:
         """
@@ -338,12 +339,11 @@ class GeoLayer:
             if type(geometry) == self._multi_geometry_class:
                 outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
                 append_bool[append_bool] = False
-                # multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]]*len(geometry), ignore_index=True)
+                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(geometry), ignore_index=True)
                 multdf.geometry = list(geometry)
                 outdf = outdf.append(multdf, ignore_index=True)
 
-        return outdf.append(self._gpd_df[append_bool], ignore_index=True)
+        return outdf.append(self._gpd_df[append_bool])
 
     def get_underlying_points_as_new_layer(self, location=None):
         """ Get underlying points constituting the layer as a new PointLayer instance
@@ -1089,19 +1089,19 @@ class PolygonLayer(GeoLayer):
             if list_of_intersecting_features:
                 geom_union = cascaded_union([geometry for geometry in list_of_intersecting_features])
                 if how == "intersection":
-                    geom_result = [self.geometry[n].intersection(geom_union)]
+                    geom_result = self.geometry[n].intersection(geom_union)
                 elif how == "difference":
-                    geom_result = explode(self.geometry[n].difference(geom_union))
+                    geom_result = self.geometry[n].difference(geom_union)
                 else:  # union
-                    geom_result = [self.geometry[n].union(geom_union)]
+                    geom_result = self.geometry[n].union(geom_union)
                 for i, geom in zip(feature_idx, list_of_intersecting_features):
                     list_of_objects.remove(i)
                     r_tree.delete(i, geom.bounds)
             else:
-                geom_result = [self.geometry[n]]
+                geom_result = self.geometry[n]
 
-            new_geometry.extend(geom_result)
-            new_rows.extend([self._gpd_df.iloc[n]] * len(geom_result))
+            new_geometry.append(geom_result)
+            new_rows.append(self._gpd_df.iloc[n])
 
         outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs).append(new_rows)
         outdf.geometry = new_geometry
@@ -1347,23 +1347,6 @@ class LineLayer(GeoLayer):
         outdf.geometry = new_geom
 
         return outdf
-
-        # distance, nearest_neighbor = points.distance_and_nearest_neighbor(self)
-        # out_df = self._gpd_df.copy()
-        #
-        # multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-        # geometry = []
-        #
-        # for nn in nearest_neighbor:
-        #     cut_points = points[nearest_neighbor == nn]
-        #     new_geom = cut_at_points(out_df.geometry[nn], cut_points.geometry)
-        #     multdf = multdf.append([out_df.iloc[nn]] * len(new_geom), ignore_index=True)
-        #     geometry.extend(new_geom)
-        #
-        # multdf.geometry = geometry
-        # out_df = out_df.append(multdf, ignore_index=True)
-        #
-        # return out_df
 
     @return_new_instance
     def split_at_underlying_points(self, location):
