@@ -88,3 +88,7 @@ class GeoLayerWarning(Warning):
 
 class PolygonLayerWarning(GeoLayerWarning):
     pass
+
+
+class ImportMetisWarning(Warning):
+    pass

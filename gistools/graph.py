@@ -7,7 +7,14 @@ More detailed description.
 
 # __all__ = []
 # __version__ = '0.1'
-import metis
+import warnings
+
+from gistools.exceptions import ImportMetisWarning
+
+try:
+    import metis
+except RuntimeError:  # No Metis DLL
+    warnings.warn("Metis error. No graph partitioning will be available", ImportMetisWarning)
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
