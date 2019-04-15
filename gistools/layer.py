@@ -1113,10 +1113,8 @@ class PolygonLayer(GeoLayer):
 
         :return:
         """
-        r_tree = r_tree_idx(self.geometry)  # No property as we delete entries from Index
-        for n in range(len(self)):
-            r_tree.delete(n, self.geometry[n].bounds)
-            if any(intersects(self.geometry[n], self.geometry, r_tree)):
+        for geom in self.geometry:
+            if intersects(geom, self.geometry, self.r_tree_idx).count(True) > 1:
                 return True
 
         return False
