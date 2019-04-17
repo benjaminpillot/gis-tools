@@ -32,7 +32,7 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    partition_polygon, shape_factor, is_in_collection
+    partition_polygon, shape_factor, is_in_collection, overlapping_features
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
@@ -1058,8 +1058,8 @@ class PolygonLayer(GeoLayer):
             to_append = []
             for n in range(len(layer)):
                 r_tree.delete(n, layer.geometry[n].bounds)
-                _, list_of_intersecting_features = intersecting_features(layer.geometry[n], layer.geometry, r_tree)
-                if list_of_intersecting_features:
+                _, list_of_overlapping_features = overlapping_features(layer.geometry[n], layer.geometry, r_tree)
+                if list_of_overlapping_features:
                     to_append.append(n)
 
             if not to_append:
@@ -1073,7 +1073,7 @@ class PolygonLayer(GeoLayer):
 
     @return_new_instance
     def fix_overlap(self, how):
-        """ Fix internal overlap
+        """ Fix internal overlaps
 
         :param how:
         :return:
@@ -1085,16 +1085,16 @@ class PolygonLayer(GeoLayer):
         while list_of_objects:
             n = list_of_objects.pop(0)
             r_tree.delete(n, self.geometry[n].bounds)
-            feature_idx, list_of_intersecting_features = intersecting_features(self.geometry[n], self.geometry, r_tree)
-            if list_of_intersecting_features:
-                geom_union = cascaded_union([geometry for geometry in list_of_intersecting_features])
+            feature_idx, list_of_overlapping_features = overlapping_features(self.geometry[n], self.geometry, r_tree)
+            if list_of_overlapping_features:
+                geom_union = cascaded_union([geometry for geometry in list_of_overlapping_features])
                 if how == "intersection":
                     geom_result = self.geometry[n].intersection(geom_union)
                 elif how == "difference":
                     geom_result = self.geometry[n].difference(geom_union)
                 else:  # union
                     geom_result = self.geometry[n].union(geom_union)
-                for i, geom in zip(feature_idx, list_of_intersecting_features):
+                for i, geom in zip(feature_idx, list_of_overlapping_features):
                     list_of_objects.remove(i)
                     r_tree.delete(i, geom.bounds)
             else:
