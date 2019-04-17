@@ -238,6 +238,23 @@ def intersecting_features(geometry, geometry_collection, r_tree=None):
            [geom for i, geom in enumerate(geometry_collection) if is_intersecting[i]]
 
 
+def overlapping_features(geometry, geometry_collection, r_tree=None):
+    """ Return list of geometries overlapping with given geometry
+
+    Overlapping geometry is either overlapping in the shapely way,
+    or within or containing the other geometry
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree:
+    :return:
+    """
+    idx, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
+    overlaps = [[i, geom] for i, geom in zip(idx, list_of_intersecting_features) if geom.overlaps(geometry) or
+                geom.within(geometry) or geom.contains(geometry)]
+
+    return [overlap[0] for overlap in overlaps], [overlap[1] for overlap in overlaps]
+
+
 def intersects(geometry, geometry_collection, r_tree=None):
     """ Return if geometry intersects with geometries of collection
 
