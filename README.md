@@ -77,13 +77,3 @@ Build DEM tile by downloading from CGIAR website and save to file
 >>> dem = DigitalElevationModel.from_cgiar_online_database((8, 38, 14, 42))
 >>> dem.to_file("path/to/dem.tif")
 ```
-
-### Example 4
-
-Merge LineLayer and then intersects with PolygonLayer
-```
->>> line_layer = gistools.layer.LineLayer("/path/to/line/layer.shp")
->>> poly_layer = gistools.layer.PolygonLayer("/path/to/poly/layer.geojson")
->>> merge_lines = line_layer.merge("attribute_name")
->>> intersect_lines = merge_lines.overlay(poly_layer, how="intersection")
-```
