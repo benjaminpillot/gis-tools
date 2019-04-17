@@ -1075,6 +1075,8 @@ class PolygonLayer(GeoLayer):
     def fix_overlap(self, how):
         """ Fix internal overlaps
 
+        Overlapping features are regarded as features which
+        overlap AND contain or are within each other
         :param how:
         :return:
         """
