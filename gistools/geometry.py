@@ -238,23 +238,6 @@ def intersecting_features(geometry, geometry_collection, r_tree=None):
            [geom for i, geom in enumerate(geometry_collection) if is_intersecting[i]]
 
 
-def overlapping_features(geometry, geometry_collection, r_tree=None):
-    """ Return list of geometries overlapping with given geometry
-
-    Overlapping geometry is either overlapping in the shapely way,
-    or within or containing the other geometry
-    :param geometry:
-    :param geometry_collection:
-    :param r_tree:
-    :return:
-    """
-    idx, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
-    overlaps = [[i, geom] for i, geom in zip(idx, list_of_intersecting_features) if geom.overlaps(geometry) or
-                geom.within(geometry) or geom.contains(geometry)]
-
-    return [overlap[0] for overlap in overlaps], [overlap[1] for overlap in overlaps]
-
-
 def intersects(geometry, geometry_collection, r_tree=None):
     """ Return if geometry intersects with geometries of collection
 
@@ -485,6 +468,37 @@ def merge(line_collection):
 
     # Keep only single parts
     return explode(merged_line)
+
+
+def overlapping_features(geometry, geometry_collection, r_tree=None):
+    """ Return list of geometries overlapping with given geometry
+
+    Overlapping geometry is either overlapping in the shapely way,
+    or within or containing the other geometry
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree:
+    :return:
+    """
+    idx, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
+    _overlaps = [[i, geom] for i, geom in zip(idx, list_of_intersecting_features) if geom.overlaps(geometry) or
+                 geom.within(geometry) or geom.contains(geometry)]
+
+    return [overlap[0] for overlap in _overlaps], [overlap[1] for overlap in _overlaps]
+
+
+def overlaps(geometry, geometry_collection, r_tree=None):
+    """ Return if geometry overlaps with geometries of collection
+
+    Overlapping is regarded as any area shared by two geometries
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree:
+    :return:
+    """
+    is_intersecting = intersects(geometry, geometry_collection, r_tree)
+    return [False if not is_intersecting[i] else geom.overlaps(geometry) or geom.within(geometry) or geom.contains(
+        geometry) for i, geom in enumerate(geometry_collection)]
 
 
 def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, precision, recursive, **metis_options):
