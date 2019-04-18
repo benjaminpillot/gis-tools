@@ -27,7 +27,7 @@ from gistools.coordinates import GeoGrid
 from gistools.conversion import raster_to_array, array_to_raster
 from gistools.exceptions import RasterMapError, GeoGridError, DigitalElevationModelError
 from gistools.files import RasterTempFile, ShapeTempFile
-from gistools.layer import PolygonLayer
+from gistools.layer import PolygonLayer, check_proj
 from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
 from gistools.surface import compute_surface
 from gistools.utils.check.type import check_type, collection_type_assert, type_assert, isfile
@@ -90,8 +90,7 @@ class GdalOpen:
     def __exit__(self, exc_type, exc_val, exc_tb):
         del self.dataset
 
-# TODO: raster map with band number, as well as no array for very large raster images... Some GDAL raster map for
-# TODO: only using gdal library with raster files
+# TODO: raster map with band number
 
 
 class RasterMap:
@@ -183,7 +182,7 @@ class RasterMap:
 
     @type_assert(filter_name=str)
     def apply_filter(self, filter_name, *args, **kwargs):
-        """ Apply filter to raster layer
+        """ Apply filter to raster
 
         :param filter_name:
         :param args: list of arguments related to filter function
@@ -192,15 +191,24 @@ class RasterMap:
         """
         return self._filters[filter_name](*args, **kwargs)
 
+    @return_new_instance
     @type_assert(geo_layer=PolygonLayer)
-    def clip(self, geo_layer: PolygonLayer):
+    def clip(self, geo_layer: PolygonLayer, crop=False, all_touched=False):
         """ Clip raster according to GeoLayer polygon(s)
 
-        Keep only points which are inside layer boundaries
+        Keep only points which are inside polygon boundaries
+        and crop raster if necessary.
         :param geo_layer: GeoLayer instance
+        :param crop: if True, crop raster
+        :param all_touched: when True, all cells touched by polygons are considered within
         :return:
         """
-        self._burn_polygon_values(geo_layer, False)
+        check_proj(geo_layer.crs, self.crs)
+        if crop:
+            new_raster = self.get_raster_at(geo_layer)
+            return new_raster.clip(geo_layer, crop=False, all_touched=all_touched)
+        else:
+            return self._burn_layer_values(geo_layer, False, all_touched)
 
     @return_new_instance
     def contour(self, interval, absolute_interval=True, percentile_min=2, percentile_max=98):
@@ -259,15 +267,18 @@ class RasterMap:
             warnings.warn("Invalid factor, factor = 1, or exceeded limit (set no_limit=True). Return copy of object")
             return self.copy()
 
+    @return_new_instance
     @type_assert(geo_layer=PolygonLayer)
-    def exclude(self, geo_layer: PolygonLayer):
+    def exclude(self, geo_layer: PolygonLayer, all_touched=False):
         """ Exclude raster cells within GeoLayer polygon(s)
 
         Keep only points outside from layer boundaries
         :param geo_layer:
+        :param all_touched: when True, all cells touched by polygons are regarded as within
         :return:
         """
-        self._burn_polygon_values(geo_layer, True)
+        check_proj(geo_layer.crs, self.crs)
+        return self._burn_layer_values(geo_layer, True, all_touched)
 
     def gdal_clip(self, extent):
         """ Static method for clipping large raster
@@ -295,7 +306,7 @@ class RasterMap:
         """ Extract sub-raster in current raster map
 
         Extract new raster from current raster map
-        by giving either a geo layer or a new geo-square
+        by giving either a geo lines_ or a new geo-square
         defined by lower-left point (ll_point) and upper
         right point (ur_point) such as for geo grids.
         :param layer: GeoLayer instance
@@ -308,8 +319,8 @@ class RasterMap:
             ur_point = (layer.bounds[2], layer.bounds[3])
 
         try:
-            ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(*ll_point)
-            ur_point_r, ur_point_c = self._geo_grid.latlon_to_2d_index(*ur_point)
+            ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(ll_point[1], ll_point[0])
+            ur_point_r, ur_point_c = self._geo_grid.latlon_to_2d_index(ur_point[1], ur_point[0])
             return self[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1], \
                 self.geo_grid[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1]
         except GeoGridError:
@@ -384,7 +395,7 @@ class RasterMap:
         """ Convert raster into vector polygon(s)
 
         :param field_name: name of the corresponding field in the final shape file
-        :param layer_name: name of corresponding layer
+        :param layer_name: name of corresponding lines_
         :param is_8_connected: pixel connectivity used for polygon
         :return:
         """
@@ -623,23 +634,24 @@ class RasterMap:
                 raise RuntimeError("Unexpected error when applying {} between '{}' and '{}': {}"
                                    .format(operator_str, type(self).__name__, type(other).__name__, e))
 
-    def _burn_polygon_values(self, geo_layer, mask):
-        """ Burn raster values inside or outside polygon
+    def _burn_layer_values(self, geo_layer, mask, all_touched):
+        """ Burn raster values inside or outside layer
 
         :param geo_layer:
         :param mask:
+        :param all_touched:
         :return:
         """
-
-        if geo_layer.geom_type != 'Polygon':
-            raise RasterMapError("Geometry of input layer must be 'Polygon' but is {}".format(geo_layer.geom_type))
-        polygon = geo_layer.to_crs(self.crs)
-        polygon["burn_value"] = 1
-        polygon = polygon.to_array(self.geo_grid, "burn_value")
+        layer = geo_layer.copy()
+        layer["burn_value"] = 1
+        layer = layer.to_array(self.geo_grid, "burn_value", all_touched=all_touched)
+        new_raster_array = self.raster_array.copy()
         if mask:
-            self[polygon == 1] = np.nan
+            new_raster_array[layer == 1] = np.nan
         else:
-            self[polygon != 1] = np.nan
+            new_raster_array[layer != 1] = np.nan
+
+        return new_raster_array
 
     def _gdal_polygonize(self, out_shp, layer_name, field_name, is_8_connected):
         """ Polygonize raster using GDAL
@@ -813,7 +825,6 @@ class DigitalElevationModel(RasterMap):
         # Return instance of DigitalElevationModel
         return DigitalElevationModel(path_to_dem_file, no_data_value=-32768)
 
-    # TODO: develop a method to retrieve DEM tile(s) from CGIAR website (SRTM3)
     @staticmethod
     def from_cgiar_online_database(bounds, margin=0, max_tiles=4):
         """ Import DEM tile from CGIAR-CSI SRTM3 database (V4.1)
