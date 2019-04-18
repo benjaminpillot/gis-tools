@@ -32,7 +32,7 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    partition_polygon, shape_factor, is_in_collection, overlapping_features
+    partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
@@ -143,7 +143,6 @@ class GeoLayer:
         # Set attributes
         self._geom_type = geometry[0]
         self._gpd_df = gpd_df
-        # self._r_tree_idx = r_tree_idx(self.geometry)
         self._r_tree_idx = None  # Set to None at creation (only compute the first time it is called)
         self._point_layer_class = PointLayer  # Point layer class/subclass corresponding to given layer class/subclass
         self._polygon_layer_class = PolygonLayer  # Corresponding polygon layer class/subclass
@@ -278,6 +277,22 @@ class GeoLayer:
         """
         return self._gpd_df.drop(labels, axis, index, columns=attributes)
 
+    @return_new_instance
+    def drop_attribute(self, attr_name):
+        """ Drop attribute
+
+        :param attr_name: attribute name (str or list of str)
+        :return:
+        """
+        attr_name = [attr_name] if isinstance(attr_name, str) else attr_name
+        drop_attr = [attr for attr in attr_name if attr in self.attributes()]
+        out_layer = self.copy()  # No need for building the instance again as it is just dropping
+
+        if drop_attr:
+            out_layer._gpd_df = self._gpd_df.drop(attr_name, axis=1)
+
+        return out_layer
+
     def drop_duplicate_geometries(self):
         """ Drop duplicate geometries
 
@@ -296,7 +311,9 @@ class GeoLayer:
     def drop_duplicates(self, *args, **kwargs):
         """ Drop duplicates
 
-        TODO: it is still troublesome... Not all duplicated rows are dropped
+        Duplicate only consider exactly equal geometries.
+        Use "drop_duplicate_geometries" if you want to drop
+        topologically equal geometries.
         Thanks to https://github.com/geopandas/geopandas/issues/521#issuecomment-346808004
         :return:
         """
@@ -306,22 +323,6 @@ class GeoLayer:
         outdf["geometry"] = outdf["geometry"].apply(lambda geom: wkb.loads(geom))
 
         return outdf
-
-    @return_new_instance
-    def drop_attribute(self, attr_name):
-        """ Drop attribute
-
-        :param attr_name: attribute name (str or list of str)
-        :return:
-        """
-        attr_name = [attr_name] if isinstance(attr_name, str) else attr_name
-        drop_attr = [attr for attr in attr_name if attr in self.attributes()]
-        out_layer = self.copy()  # No need for building the instance again as it is just dropping
-
-        if drop_attr:
-            out_layer._gpd_df = self._gpd_df.drop(attr_name, axis=1)
-
-        return out_layer
 
     @return_new_instance
     def explode(self):
@@ -599,6 +600,7 @@ class GeoLayer:
                 raise GeoLayerError("other must be PolygonLayer but is '%s'" % other.__class__)
 
         how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
+        # TODO: implement "union", "symmetric_difference" and "identity" methods
 
         new_geom = []
         if how == "intersection":
@@ -628,9 +630,6 @@ class GeoLayer:
 
         else:
             outdf = self._gpd_df.copy()
-
-        # if len(outdf) == 0:
-        #     raise GeoLayerError("Resulting layer is empty")
 
         outdf = outdf.drop(columns=["geometry"])
         outdf.geometry = new_geom
@@ -1020,6 +1019,7 @@ class PolygonLayer(GeoLayer):
         """ Clean invalid geometries
 
         Send warning if invalid geometry is removed from layer
+        :param delete_invalid: delete invalid geometries
         :return:
         """
         layer = self.buffer(0, 0)
@@ -1116,7 +1116,7 @@ class PolygonLayer(GeoLayer):
         :return:
         """
         for geom in self.geometry:
-            if intersects(geom, self.geometry, self.r_tree_idx).count(True) > 1:
+            if overlaps(geom, self.geometry, self.r_tree_idx).count(True) > 1:
                 return True
 
         return False
