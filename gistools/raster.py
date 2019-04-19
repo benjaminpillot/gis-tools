@@ -689,10 +689,6 @@ class RasterMap:
             dst_ds.SetProjection(wkt_from(self.crs))
             gdal.RegenerateOverview(source_ds.GetRasterBand(1), dst_ds.GetRasterBand(1), 'mode')
 
-        # Other method:
-        # gdal.ReprojectImage(source_ds, resample, source_ds.GetProjection(), resample.GetProjection(),
-        #                     gdalconst.GRA_NearestNeighbour)
-
     @gdal_decorator()
     def _gdal_warp(self, output_raster, srs):
         with GdalOpen(self.raster_file) as src_ds:
@@ -781,6 +777,10 @@ class DigitalElevationModel(RasterMap):
         """
         return self._compute_aspect()
 
+    # TODO: relate following method to functions in "topography" module
+    def get_horizon(self):
+        pass
+
     @gdal_decorator(no_data_value=-9999)
     def _compute_slope(self, out_raster, slope_format):
 
@@ -796,7 +796,8 @@ class DigitalElevationModel(RasterMap):
 
     @staticmethod
     @type_assert(bounds=tuple, product=str, margin=(int, float))
-    def from_online_srtm_database(bounds, path_to_dem_file=DEFAULT_OUTPUT, product="SRTM1", margin=0):
+    def from_online_srtm_database(bounds, path_to_dem_file=DEFAULT_OUTPUT, product="SRTM1", margin=0,
+                                  no_data_value=-32768):
         """ Import DEM tile from SRTM3 or SRTM1 online dataset
 
         Based on "elevation" module. Be careful that at the moment, SRTM3 product
@@ -805,6 +806,7 @@ class DigitalElevationModel(RasterMap):
         :param path_to_dem_file:
         :param product: "SRTM1" or "SRTM3"
         :param margin: margin (in %) around DEM
+        :param no_data_value: no data filling value (default = -32768)
         :return:
         """
         from subprocess import CalledProcessError
@@ -823,15 +825,16 @@ class DigitalElevationModel(RasterMap):
             raise DigitalElevationModelError("Invalid input argument: %s" % e)
 
         # Return instance of DigitalElevationModel
-        return DigitalElevationModel(path_to_dem_file, no_data_value=-32768)
+        return DigitalElevationModel(path_to_dem_file, no_data_value=no_data_value)
 
     @staticmethod
-    def from_cgiar_online_database(bounds, margin=0, max_tiles=4):
+    def from_cgiar_online_database(bounds, margin=0, max_tiles=4, no_data_value=-32768):
         """ Import DEM tile from CGIAR-CSI SRTM3 database (V4.1)
 
         :param bounds: bounds of the image --> (x_min, y_min, x_max, y_max)
         :param margin: margin (in %) around DEM
         :param max_tiles: max number of tiles to download
+        :param no_data_value: no data filling value (default = -32768)
         :return:
         """
         srtm_lon = np.arange(-180, 185, 5)
@@ -849,7 +852,7 @@ class DigitalElevationModel(RasterMap):
         for x in range(int(x_min), int(x_max) + 1):
             for y in range(int(y_min), int(y_max) + 1):
                 tile_temp_file = _download_srtm_tile("srtm_%02d_%02d" % (x, y))
-                list_of_tiles.append(DigitalElevationModel(tile_temp_file, no_data_value=-32768))
+                list_of_tiles.append(DigitalElevationModel(tile_temp_file, no_data_value=no_data_value))
 
         # Merge DEMs
         return DigitalElevationModel.merge(list_of_tiles, bounds)
