@@ -403,7 +403,7 @@ def katana_centroid(polygon, threshold, count=0):
             split_poly = [split_poly]
         for sub_poly in split_poly:
             if isinstance(sub_poly, (Polygon, MultiPolygon)):
-                result.extend(katana(sub_poly, threshold, count+1))
+                result.extend(katana_centroid(sub_poly, threshold, count+1))
 
     return result
 
