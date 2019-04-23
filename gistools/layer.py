@@ -32,7 +32,7 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps
+    area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
@@ -735,7 +735,6 @@ class GeoLayer:
             if geometry.__getattribute__(self._split_threshold) <= threshold:
                 append_bool[idx] = True
             else:
-                # append_bool[append_bool] = False
                 multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
                 split_geom = self._split_methods[method](geometry, threshold)
                 if no_multipart:
@@ -982,7 +981,8 @@ class PolygonLayer(GeoLayer):
     Geo layer of polygons
     """
 
-    _split_methods = {'katana_simple': katana, 'katana_centroid': katana_centroid, 'fishnet': fishnet}
+    _partition_methods = {'area': area_partition_polygon}
+    _split_methods = {'katana_simple': katana, 'katana_centroid': katana_centroid, 'fishnet': fishnet, 'hexana': hexana}
     _split_threshold = 'area'
     _geometry_class = Polygon
     _multi_geometry_class = MultiPolygon
@@ -1137,26 +1137,28 @@ class PolygonLayer(GeoLayer):
 
     @return_new_instance
     def partition(self, threshold, weight_attr="area", disaggregation_factor=16, metric_precision=100, recursive=False,
-                  **metis_options):
-        """
+                  split_method="katana", **metis_options):
+        """ Partition polygon layer using graph theory
 
         :param threshold: surface threshold for polygon partitioning
         :param weight_attr: sub polygon weight key ("area", "length") for partitioning
         :param disaggregation_factor: disaggregation before re-aggregating
         :param metric_precision: metric precision for partitioning
         :param recursive:
+        :param split_method:
         :param metis_options: optional arguments specific to METIS
         :return:
         """
+        split_method = check_string(split_method, self._split_methods.keys())
 
         outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
         append_bool = np.full(len(self), False)
         for idx, geometry in enumerate(self.geometry):
             if geometry.area > threshold:
                 multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                new_geom = partition_polygon(
-                    geometry, threshold, weight_attr=weight_attr, disaggregation_factor=disaggregation_factor,
-                    precision=metric_precision, recursive=recursive, **metis_options)
+                new_geom = self._partition_methods[weight_attr](
+                    geometry, threshold, disaggregation_factor=disaggregation_factor, precision=metric_precision,
+                    recursive=recursive, split=split_method, **metis_options)
                 multdf = multdf.append([self._gpd_df.iloc[idx]] * len(new_geom), ignore_index=True)
                 multdf.geometry = new_geom
                 outdf = outdf.append(multdf, ignore_index=True)
