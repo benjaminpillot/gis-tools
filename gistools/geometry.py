@@ -14,7 +14,7 @@ import networkx as nx
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString
-from shapely.ops import cascaded_union, linemerge
+from shapely.ops import cascaded_union, linemerge, unary_union
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
@@ -320,7 +320,7 @@ def hexana(polygon, threshold):
         elif hexagon.overlaps(polygon):
             hexa_split.append(hexagon.intersection(polygon))
 
-    return hexa_split
+    return explode(hexa_split)
 
 
 def intersecting_features(geometry, geometry_collection, r_tree=None):
@@ -599,13 +599,12 @@ def overlaps(geometry, geometry_collection, r_tree=None):
         geometry) for i, geom in enumerate(geometry_collection)]
 
 
-def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, precision, recursive, split="katana",
-                      **metis_options):
-    """ Partition polygon into a subset of polygons of equal weight
+def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split="katana_centroid",
+                           **metis_options):
+    """ Partition polygon into a subset of polygons of equal area
 
     :param polygon: polygon intended to be partitioned
     :param unit_area: area of a sub-polygon
-    :param weight_attr: node weight used in graph partitioning {'area', 'length'}
     :param disaggregation_factor: factor use to discretize polygons before aggregation
     :param recursive: k-way or recursive method for partitioning
     :param precision: metric precision for sub-polygon attributes (area, length, etc.)
@@ -613,45 +612,76 @@ def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, pr
     :param metis_options: specific METIS options (see METIS manual)
     :return:
     """
-    weight_attr = check_string(weight_attr, {"area", "length"})
     nparts = int(polygon.area/unit_area)
-    polygon_collection = []
 
     if nparts <= 1 and (polygon.area - unit_area) < unit_area/disaggregation_factor:
-        polygon_collection.append(polygon)
-        return polygon_collection
+        return [polygon]
 
-    # Split
-    if split == "katana":
-        split_polygon = katana_centroid(polygon, unit_area/disaggregation_factor)
+    # Split polygon into sub-elements
+    if split == "katana_simple":
+        split_polygon = katana(polygon, unit_area / disaggregation_factor)
+    elif split == "katana_centroid":
+        split_polygon = katana_centroid(polygon, unit_area / disaggregation_factor)
     else:
-        split_polygon = hexana(polygon, unit_area/disaggregation_factor)
-    graph = polygon_collection_to_graph(split_polygon, precision)
+        split_polygon = hexana(polygon, unit_area / disaggregation_factor)
+
     division = [unit_area/polygon.area] * nparts
     if polygon.area % unit_area != 0:
         division += [(polygon.area - nparts * unit_area)/polygon.area]
         nparts += 1
 
+    area = [int(poly.area / (precision ** 2)) for poly in split_polygon]
+
+    return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
+
+
+def aggregate_partitions(polygons, weights, nparts, division, weight_attr, original_split, recursive, **metis_options):
+    """ Aggregate polygons into partitions
+
+    :param polygons: polygons to aggregate
+    :param weights: polygons' corresponding weight
+    :param nparts: number of partitions
+    :param division: list of final relative weights of each partition
+    :param weight_attr:
+    :param original_split:
+    :param recursive:
+    :param metis_options:
+    :return:
+    """
+    if "contig" in metis_options.keys():
+        is_contiguous = metis_options["contig"]
+    else:
+        is_contiguous = False
+    graph = polygon_collection_to_graph(polygons, weights, original_split, is_contiguous, weight_attr)
     tpweights = [(d,) for d in division]
     partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
 
+    partition_collection = []
     for part in partition:
-        polygon_collection.append(cascaded_union([split_polygon[n] for n in part]))
+        partition_collection.append(unary_union([polygons[n] for n in part]))
 
-    return explode(polygon_collection)
+    return partition_collection
 
 
-def polygon_collection_to_graph(polygon_collection, precision):
+def polygon_collection_to_graph(polygon_collection, weights, original_split, is_contiguous, weight_attr="weight"):
     """ Convert collection of polygons to networkx graph
 
     Conversion of a polygon collection into a graph allows
     later graph partitioning
     :param polygon_collection:
-    :param precision: metric precision for polygon attributes (in m) --> for surface, precision is squared
+    :param weights: weight of each polygon in collection
+    :param original_split: "katana" or "hexana"
+    :param is_contiguous: True or False (metis options)
+    :param weight_attr: name of weight attribute
     :return:
     """
     if not is_iterable(polygon_collection):
         raise TypeError("Input must be a collection but is '{}'".format(type(polygon_collection)))
+
+    if original_split == "katana":
+        is_katana = True
+    else:
+        is_katana = False
 
     r_tree = r_tree_idx(polygon_collection)
     graph = nx.Graph()
@@ -659,9 +689,13 @@ def polygon_collection_to_graph(polygon_collection, precision):
     for n, polygon in enumerate(polygon_collection):
         list_of_intersecting_features, _ = intersecting_features(polygon, polygon_collection, r_tree)
         list_of_intersecting_features.remove(n)
-        graph.add_edges_from([(n, feature) for feature in list_of_intersecting_features
-                              if not isinstance(polygon.intersection(polygon_collection[feature]), Point)])
-        graph.add_node(n, area=int(polygon.area/(precision**2)), length=int(polygon.length/precision))
+        if list_of_intersecting_features or not is_contiguous:
+            if is_katana:
+                graph.add_edges_from([(n, feature) for feature in list_of_intersecting_features
+                                      if not isinstance(polygon.intersection(polygon_collection[feature]), Point)])
+            else:
+                graph.add_edges_from([(n, feature) for feature in list_of_intersecting_features])
+            graph.add_node(n, **{weight_attr: weights[n]})
 
     return graph
 
