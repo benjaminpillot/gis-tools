@@ -214,6 +214,86 @@ def explode(geometry_collection):
     return single
 
 
+# Thanks to https://gist.github.com/urschrei/17cf0be92ca90a244a91
+def honeycomb(startx, starty, endx, endy, radius=None, area=None):
+    """
+    Calculate a grid of hexagon coordinates of the given radius
+    given lower-left and upper-right coordinates
+    Returns a list of lists containing 6 tuples of x, y point coordinates
+    These can be used to construct valid regular hexagonal polygons
+
+    - update 04/23/2019:
+        * can give either radius or area of unit hexagon
+        * return a list of shapely Polygon
+
+    You will probably want to use projected coordinates for this
+    """
+    if not radius:
+        radius = np.sqrt(area / (2*np.sqrt(3)))
+
+    # calculate side length given radius
+    sl = (2 * radius) * np.tan(np.pi / 6)
+    # calculate radius for a given side-length
+    # (a * (math.cos(math.pi / 6) / math.sin(math.pi / 6)) / 2)
+    # see http://www.calculatorsoup.com/calculators/geometry-plane/polygon.php
+
+    # calculate coordinates of the hexagon points
+    # sin(30)
+    p = sl * 0.5
+    b = sl * np.cos(np.radians(30))
+    w = b * 2
+    h = 2 * sl
+
+    # offset start and end coordinates by hex widths and heights to guarantee coverage
+    startx = startx - w
+    starty = starty - h
+    endx = endx + w
+    endy = endy + h
+    origx = startx
+
+    # offsets for moving along and up rows
+    xoffset = b
+    yoffset = 3 * p
+
+    polygons = []
+    row = 1
+    counter = 0
+
+    while starty < endy:
+        if row % 2 == 0:
+            startx = origx + xoffset
+        else:
+            startx = origx
+        while startx < endx:
+            p1x = startx
+            p1y = starty + p
+            p2x = startx
+            p2y = starty + (3 * p)
+            p3x = startx + b
+            p3y = starty + h
+            p4x = startx + w
+            p4y = starty + (3 * p)
+            p5x = startx + w
+            p5y = starty + p
+            p6x = startx + b
+            p6y = starty
+            poly = [
+                (p1x, p1y),
+                (p2x, p2y),
+                (p3x, p3y),
+                (p4x, p4y),
+                (p5x, p5y),
+                (p6x, p6y),
+                (p1x, p1y)]
+            polygons.append(Polygon(poly))
+            counter += 1
+            startx += w
+        starty += yoffset
+        row += 1
+
+    return polygons
+
+
 def fishnet(polygon, threshold):
     """ Intersect polygon with a regular grid or "fishnet"
 
@@ -223,6 +303,24 @@ def fishnet(polygon, threshold):
     """
     # TODO: implement fishnet split operation
     pass
+
+
+def hexana(polygon, threshold):
+    """ Split a polygon using a honeycomb grid
+
+    :param polygon: original polygon to split
+    :param threshold: unit hexagon surface
+    :return: list of polygons
+    """
+    honey_grid = honeycomb(*polygon.bounds, area=threshold)
+    hexa_split = []
+    for hexagon in honey_grid:
+        if hexagon.within(polygon):
+            hexa_split.append(hexagon)
+        elif hexagon.overlaps(polygon):
+            hexa_split.append(hexagon.intersection(polygon))
+
+    return hexa_split
 
 
 def intersecting_features(geometry, geometry_collection, r_tree=None):
@@ -501,7 +599,8 @@ def overlaps(geometry, geometry_collection, r_tree=None):
         geometry) for i, geom in enumerate(geometry_collection)]
 
 
-def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, precision, recursive, **metis_options):
+def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, precision, recursive, split="katana",
+                      **metis_options):
     """ Partition polygon into a subset of polygons of equal weight
 
     :param polygon: polygon intended to be partitioned
@@ -510,6 +609,7 @@ def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, pr
     :param disaggregation_factor: factor use to discretize polygons before aggregation
     :param recursive: k-way or recursive method for partitioning
     :param precision: metric precision for sub-polygon attributes (area, length, etc.)
+    :param split: how to split the blocks composing the partitions ("katana", "hexana")
     :param metis_options: specific METIS options (see METIS manual)
     :return:
     """
@@ -522,16 +622,16 @@ def partition_polygon(polygon, unit_area, weight_attr, disaggregation_factor, pr
         return polygon_collection
 
     # Split
-    split_polygon = katana_centroid(polygon, unit_area/disaggregation_factor)
+    if split == "katana":
+        split_polygon = katana_centroid(polygon, unit_area/disaggregation_factor)
+    else:
+        split_polygon = hexana(polygon, unit_area/disaggregation_factor)
     graph = polygon_collection_to_graph(split_polygon, precision)
     division = [unit_area/polygon.area] * nparts
     if polygon.area % unit_area != 0:
         division += [(polygon.area - nparts * unit_area)/polygon.area]
         nparts += 1
 
-    # tpweights = [[d] for d in division]
-    # _, partition = nxmetis.partition(graph, nparts, node_weight=weight_attr, tpwgts=tpweights, recursive=recursive,
-    #                                  options=nxmetis.MetisOptions(**metis_options))
     tpweights = [(d,) for d in division]
     partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
 
