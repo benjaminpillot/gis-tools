@@ -77,3 +77,13 @@ Build DEM tile by downloading from CGIAR website and save to file
 >>> dem = DigitalElevationModel.from_cgiar_online_database((8, 38, 14, 42))
 >>> dem.to_file("path/to/dem.tif")
 ```
+
+### Example 4
+
+Partition a polygon layer into sub-polygons of equal area with respect to 
+honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) library package)
+```
+>>> polygon_layer = gistools.layer.PolygonLayer("path/to/layer.geojson")
+>>> new_partitioned_layer = polygon_layer.partition(threshold=2000, disaggregation_factor=20, 
+                                                    split_method="hexana", contig=True)
+```
