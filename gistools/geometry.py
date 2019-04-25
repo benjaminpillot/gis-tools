@@ -13,12 +13,11 @@ import networkx as nx
 
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
-    Point, MultiLineString
+    Point, MultiLineString, JOIN_STYLE
 from shapely.ops import cascaded_union, linemerge, unary_union
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
-from gistools.utils.check import check_string
 from gistools.utils.check.type import is_iterable, type_assert
 
 __author__ = 'Benjamin Pillot'
@@ -383,6 +382,7 @@ def join(geometry_collection):
         geom_idx = []
         increment = 0
 
+        # TODO: use "intersecting_features" function
         while len(geom_idx) < len(geometry_collection):
 
             if increment not in geom_idx:
@@ -393,6 +393,7 @@ def join(geometry_collection):
                 union = [geometry_collection[n] for n in list_of_truly_intersecting_features]
 
                 if len(union) > 0:
+                    # TODO: use "no_artifact_unary_union" function
                     joint.append(cascaded_union(union))
 
                 for ix in list_of_truly_intersecting_features:
@@ -568,6 +569,18 @@ def merge(line_collection):
     return explode(merged_line)
 
 
+def no_artifact_unary_union(geoms, eps=0.00001):
+    """ Make unary union that does not return artifacts
+
+    Thanks to https://gis.stackexchange.com/questions/277334/shapely-polygon-union-results-in-strange-artifacts-of
+    -tiny-non-overlapping-area
+    :param geoms: list of geoms to aggregate
+    :param eps: buffering precision
+    :return:
+    """
+    return unary_union(geoms).buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
+
+
 def overlapping_features(geometry, geometry_collection, r_tree=None):
     """ Return list of geometries overlapping with given geometry
 
@@ -658,7 +671,7 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, origi
 
     partition_collection = []
     for part in partition:
-        partition_collection.append(unary_union([polygons[n] for n in part]))
+        partition_collection.append(no_artifact_unary_union([polygons[n] for n in part]))
 
     return partition_collection
 
