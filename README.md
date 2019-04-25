@@ -8,7 +8,7 @@ It allows easily mixing operations between vectors and raster maps (multi-band r
 ## Basic operations
 GisTools allows some of the following operations:
 - [x] Fast polygon intersection and split
-- [x] Polygon partition based on graph theory
+- [x] Polygon partition based on graph theory (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
 - [x] Basic networking (shortest path)
 - [x] Downloading DEM from online databases
 - [x] Extract raster statistics with respect to vector layers (polygon/line)
@@ -81,7 +81,7 @@ Build DEM tile by downloading from CGIAR website and save to file
 ### Example 4
 
 Partition a polygon layer into sub-polygons of equal area with respect to 
-honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) library package)
+honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
 ```
 >>> polygon_layer = gistools.layer.PolygonLayer("path/to/layer.geojson")
 >>> new_partitioned_layer = polygon_layer.partition(threshold=2000, disaggregation_factor=20, 
