@@ -227,10 +227,11 @@ def array_to_raster(raster_file: str, array: np.ndarray, geo_grid: GeoGrid, crs,
     return 0
 
 
-def raster_to_array(raster_file: str):
+def raster_to_array(raster_file: str, band=None):
     """ Get numpy array from raster file
 
     :param raster_file: path to raster file
+    :param band: raster band number
     :return: numpy array
 
     :Example:
@@ -238,9 +239,8 @@ def raster_to_array(raster_file: str):
     """
     check_type(raster_file, str)
 
-    try:
-        source_ds = gdal.Open(raster_file)
-    except RuntimeError as error:
-        raise error
-    else:
-        return source_ds.ReadAsArray()
+    source_ds = gdal.Open(raster_file)
+    if band:
+        source_ds = source_ds.GetRasterBand(band)
+
+    return source_ds.ReadAsArray()
