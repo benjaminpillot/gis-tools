@@ -60,42 +60,50 @@ class ZonalStatistics:
         # Raster
         self.raster = raster
 
+    # TODO: implement other statistical methods (min, max, count, etc.)
+    def min(self):
+        """ Compute zonal min
+
+        :return:
+        """
+        pass
+
+    def max(self):
+        """ Compute zonal max
+
+        :return:
+        """
+        pass
+
     def mean(self):
         """ Compute zonal mean
 
         :return: list of mean values for each geometry zone
         """
-        def average(raster):
-            if self.is_surface_weighted:
-                return [np.average(cell[~np.isnan(cell)], surf[~np.isnan(cell)]) for cell,
-                        surf in self._get_raster_cell_values_with_surface(raster)]
-            else:
-                return [np.nanmean(cell) for cell in self._get_raster_cell_values(raster)]
-
-        if isinstance(self.raster, list):
-            return [average(r) for r in self.raster]
-        else:
-            return average(self.raster)
+        return self._get_statistic(method=np.nanmean, weight_method=np.average)
 
     def std(self):
         """ Compute zonal standard deviation
 
         :return: list of std values for each geometry zone
         """
-        def standard_deviation(raster):
-            if self.is_surface_weighted:
-                return [weight_std(cell[~np.isnan(cell)], surf[~np.isnan(cell)]) for
-                        cell, surf in self._get_raster_cell_values_with_surface(raster)]
-            else:
-                return [np.nanstd(cell) for cell in self._get_raster_cell_values(raster)]
-
-        if isinstance(self.raster, list):
-            return [standard_deviation(r) for r in self.raster]
-        else:
-            return standard_deviation(self.raster)
+        return self._get_statistic(method=np.nanstd, weight_method=weight_std)
 
     ###################
     # Protected methods
+
+    def _get_statistic(self, method, weight_method):
+        def statistic(raster):
+            if self.is_surface_weighted:
+                return [weight_method(cell[~np.isnan(cell)], surf[~np.isnan(cell)]) for cell, surf in
+                        self._get_raster_cell_values_with_surface(raster)]
+            else:
+                return [method(cell) for cell in self._get_raster_cell_values(raster)]
+
+        if isinstance(self.raster, list):
+            return [statistic(r) for r in self.raster]
+        else:
+            return statistic(self.raster)
 
     def _get_raster_cell_values(self, raster):
         n = 0
