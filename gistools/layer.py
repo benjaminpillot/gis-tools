@@ -36,7 +36,7 @@ from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from gistools.toolset.list import split_list_by_index
-from gistools.utils.check import check_type, check_string, type_assert, protected_property
+from gistools.utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
 from gistools.utils.check.value import check_sub_collection_in_collection
 
 # __all__ = []
@@ -286,12 +286,11 @@ class GeoLayer:
         """
         attr_name = [attr_name] if isinstance(attr_name, str) else attr_name
         drop_attr = [attr for attr in attr_name if attr in self.attributes()]
-        out_layer = self.copy()  # No need for building the instance again as it is just dropping
 
         if drop_attr:
-            out_layer._gpd_df = self._gpd_df.drop(attr_name, axis=1)
-
-        return out_layer
+            return self._gpd_df.drop(attr_name, axis=1)
+        else:
+            return self._gpd_df.copy()
 
     def drop_duplicate_geometries(self):
         """ Drop duplicate geometries
@@ -658,6 +657,7 @@ class GeoLayer:
 
         return self._point_layer_class(outdf, self.name)
 
+    @return_new_instance
     def rename(self, attribute_name, new_name):
         """ Rename attribute in table
 
@@ -665,16 +665,13 @@ class GeoLayer:
         :param new_name: str or collection of str
         :return:
         """
-        out_layer = self.copy()  # No need to return new instance as it is just renaming
+        outdf = self._gpd_df.copy()
         attribute_name = [attribute_name] if isinstance(attribute_name, str) else attribute_name
         new_name = [new_name] if isinstance(new_name, str) else new_name
         if len(attribute_name) != len(new_name):
             raise GeoLayerError("Both inputs must have the same length")
 
-        out_layer._gpd_df = out_layer._gpd_df.rename(
-            index=str, columns={attr_name: name for attr_name, name in zip(attribute_name, new_name)})
-
-        return out_layer
+        return outdf.rename(index=str, columns={attr_name: name for attr_name, name in zip(attribute_name, new_name)})
 
     @return_new_instance
     def simplify(self, tolerance=0.2):
@@ -913,13 +910,10 @@ class GeoLayer:
     def pyproj(self):
         return pyproj.Proj(self._gpd_df.crs)
 
-    # Rtree property: only compute at first call
-    # I'm not sure it is a good practice though...
-    @property
+    # Rtree property: lazy property (only computed once when accessed for the first time)
+    @lazyproperty
     def r_tree_idx(self):
-        if self._r_tree_idx is None:
-            self._r_tree_idx = r_tree_idx(self.geometry)
-        return self._r_tree_idx
+        return r_tree_idx(self.geometry)
 
     @property
     def schema(self):
