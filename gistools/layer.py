@@ -1105,7 +1105,7 @@ class PolygonLayer(GeoLayer):
         return outdf
 
     def has_overlap(self):
-        """ Does layer contain overlaps ?
+        """ Does layer contain any overlap ?
 
         :return:
         """
@@ -1386,22 +1386,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
-if __name__ == '__main__':
-    from gistools.utils.sys.timer import Timer
-    from matplotlib import pyplot as plt
-    test = PolygonLayer("/home/benjamin/Documents/Data/Parc amazonien/enp_pn_s_973.shp")
-    # test = test[[2]].to_crs(32622)
-    with Timer() as t:
-        # split_test = test.split(50000000/20, "hexana")
-        test = test.split_into_equal_areas(1000000000, disaggregation_factor=20, precision=1000, split_method="hexana",
-                                           contig=True, ncuts=2)
-    print("spend time: %s" % t)
-    test["attr"] = np.random.randint(1000, size=(len(test),))
-    test["area"] = test.area
-    # split_test.plot()
-    # plt.show()
-    test.plot(attribute="area")
-    plt.show()
-    print(test.area)
