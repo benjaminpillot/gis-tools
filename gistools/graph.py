@@ -7,6 +7,7 @@ More detailed description.
 
 # __all__ = []
 # __version__ = '0.1'
+import networkx as nx
 import warnings
 
 from gistools.exceptions import ImportMetisWarning
@@ -32,6 +33,9 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
     :param metis_options:
     :return:
     """
+    # If contiguous partition is requested, only keep main contiguous graph component
+    if metis_options["contig"]:
+        graph = max(list(nx.connected_component_subgraphs(graph)), key=len)
 
     graph.graph["node_weight_attr"] = node_weight_attr
     _, parts = metis.part_graph(graph, nparts, tpwgts=tpweights, ubvec=None, recursive=recursive, **metis_options)
@@ -39,4 +43,5 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
     for u, i in zip(graph, parts):
         partition[i].append(u)
 
-    return partition
+    # Only return non-empty parts
+    return [part for part in partition if part]
