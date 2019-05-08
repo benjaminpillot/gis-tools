@@ -620,7 +620,7 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
     :param unit_area: area of a sub-polygon
     :param disaggregation_factor: factor use to discretize polygons before aggregation
     :param recursive: k-way or recursive method for partitioning
-    :param precision: metric precision for sub-polygon attributes (area, length, etc.)
+    :param precision: metric precision for sub-polygon area
     :param split: function used to split polygon into smaller unit blocks
     :param metis_options: specific METIS options (see METIS manual)
     :return:
@@ -632,13 +632,14 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
 
     # Split polygon into sub-elements
     split_polygon = split(polygon, unit_area / disaggregation_factor)
+    # split_polygon = [poly for poly in split_polygon if int(poly.area / precision) != 0]
 
     division = [unit_area/polygon.area] * nparts
-    if polygon.area % unit_area != 0:
+    if polygon.area % unit_area != 0:  # and (polygon.area - nparts * unit_area) >= unit_area/disaggregation_factor:
         division += [(polygon.area - nparts * unit_area)/polygon.area]
         nparts += 1
 
-    area = [int(poly.area / (precision ** 2)) for poly in split_polygon]
+    area = [int(poly.area / precision) for poly in split_polygon]
 
     return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
 
