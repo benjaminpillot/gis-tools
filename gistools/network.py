@@ -37,46 +37,55 @@ SPEED_RATIO = {'m/s': 1, 'km/h': 3.6}
 TIME_FORMAT = {'s': 1, 'm': 1/60, 'h': 1/3600}
 
 
-def _multi_edges(graph):
+def multi_edges(graph):
     """ Return multiple edges between 2 nodes
 
     :return: list of edge IDs that connect the same nodes
     """
-    multi_edges = []
+    m_edges = []
     for node in graph.nodes():
         for neighbor in graph.neighbors(node):
             if graph.number_of_edges(node, neighbor) > 1:
                 edge_id = [i for i in graph[node][neighbor]]
-                if edge_id not in multi_edges:
-                    multi_edges.append(edge_id)
+                if edge_id not in m_edges:
+                    m_edges.append(edge_id)
 
-    return multi_edges
+    return m_edges
 
 
-def _remote_edges(graph):
+def remote_edges(graph):
     """ Return remote edges
 
     Remote edges are not connected to anything
     :return: list of edge IDs that are remote
     """
-    remote_edges = []
+    rm_edges = []
     for u, v in graph.edges():
         if len(list(graph.neighbors(u))) == 1 and len(list(graph.neighbors(v))) == 1:
-            remote_edges.extend(list(graph[u][v]))
+            rm_edges.extend(list(graph[u][v]))
 
-    return remote_edges
+    return rm_edges
 
 
-def _self_loops(graph):
+def remote_nodes(graph):
+    """ Return remote nodes
+
+    :param graph:
+    :return:
+    """
+    return [u for u in graph.nodes() if len(list(graph.neighbors(u))) == 0]
+
+
+def self_loops(graph):
     """ Return self-loop edges
 
     :return: list of edge IDs that are self-loops
     """
-    self_loops = []
+    slf_loops = []
     for self_loop in nx.selfloop_edges(graph, keys=True):
-        self_loops.append(self_loop[2])
+        slf_loops.append(self_loop[2])
 
-    return self_loops
+    return slf_loops
 
 
 def find_all_disconnected_edges_and_fix(edges, tolerance, method):
@@ -169,7 +178,7 @@ class Edge(LineLayer):
 
         return self.drop(self.index[idx_edge])
 
-        # TODO: implement island reconnection and tolerance
+        # TODO: implement island reconnection and tolerance (see Edge.reconnect() method)
 
     @return_new_instance
     def get_path(self, path):
@@ -210,7 +219,7 @@ class Edge(LineLayer):
 
         :return: list of edge IDs that connect the same nodes
         """
-        return _multi_edges(self._graph)
+        return multi_edges(self._graph)
 
     def get_remote_edges(self):
         """ Get remote edges
@@ -218,14 +227,14 @@ class Edge(LineLayer):
         Remote edges are not connected to anything
         :return: list of edge IDs that are remote
         """
-        return _remote_edges(self._graph)
+        return remote_edges(self._graph)
 
     def get_self_loops(self):
         """ Get self-loop edges
 
         :return: list of edge IDs that are self-loops
         """
-        return _self_loops(self._graph)
+        return self_loops(self._graph)
 
     @return_new_instance
     def get_simplified(self):
@@ -297,9 +306,10 @@ class Edge(LineLayer):
     def reconnect(self, tolerance):
         """ Reconnect disconnected edges with respect to tolerance
 
-        :param tolerance: min distance for reconnection
+        :param tolerance: min distance (in m) for reconnection
         :return:
         """
+        # TODO: link with Edge.find_disconnected_islands_and_fix() method
         outdf = self._gpd_df.copy()
         nodes, edge_idx = self.get_end_nodes()
         nearest_nodes, node_idx = nodes.nearest_neighbors(nodes, tolerance)
@@ -589,21 +599,21 @@ class Network:
 
         :return: list of edge IDs
         """
-        return _self_loops(self.graph)
+        return self_loops(self.graph)
 
     def get_remote_edges(self):
         """ Get remote edges in network
 
         :return: list of edge IDs
         """
-        return _remote_edges(self.graph)
+        return remote_edges(self.graph)
 
     def get_multi_edges(self):
         """ Get multi-edges in network
 
         :return: list of list of edge IDs
         """
-        return _multi_edges(self.graph)
+        return multi_edges(self.graph)
 
     def get_minimum_distance_to_network(self, layer):
         """ get minimum distance from given layer to network
