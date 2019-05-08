@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-""" Module summary description.
+""" Split polygon into sub-polygons with equal area using graph partition (requires METIS packages)
 
 More detailed description.
 """
