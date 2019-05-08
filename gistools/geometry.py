@@ -612,7 +612,7 @@ def overlaps(geometry, geometry_collection, r_tree=None):
         geometry) for i, geom in enumerate(geometry_collection)]
 
 
-def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split="katana_centroid",
+def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split=hexana,
                            **metis_options):
     """ Partition polygon into a subset of polygons of equal area
 
@@ -621,7 +621,7 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
     :param disaggregation_factor: factor use to discretize polygons before aggregation
     :param recursive: k-way or recursive method for partitioning
     :param precision: metric precision for sub-polygon attributes (area, length, etc.)
-    :param split: how to split the blocks composing the partitions ("katana", "hexana")
+    :param split: function used to split polygon into smaller unit blocks
     :param metis_options: specific METIS options (see METIS manual)
     :return:
     """
@@ -631,12 +631,7 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
         return [polygon]
 
     # Split polygon into sub-elements
-    if split == "katana_simple":
-        split_polygon = katana(polygon, unit_area / disaggregation_factor)
-    elif split == "katana_centroid":
-        split_polygon = katana_centroid(polygon, unit_area / disaggregation_factor)
-    else:
-        split_polygon = hexana(polygon, unit_area / disaggregation_factor)
+    split_polygon = split(polygon, unit_area / disaggregation_factor)
 
     division = [unit_area/polygon.area] * nparts
     if polygon.area % unit_area != 0:
@@ -648,7 +643,7 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
     return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
 
 
-def aggregate_partitions(polygons, weights, nparts, division, weight_attr, original_split, recursive, **metis_options):
+def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split, recursive, **metis_options):
     """ Aggregate polygons into partitions
 
     :param polygons: polygons to aggregate
@@ -656,7 +651,7 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, origi
     :param nparts: number of partitions
     :param division: list of final relative weights of each partition
     :param weight_attr:
-    :param original_split:
+    :param split:
     :param recursive:
     :param metis_options:
     :return:
@@ -665,7 +660,7 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, origi
         is_contiguous = metis_options["contig"]
     else:
         is_contiguous = False
-    graph = polygon_collection_to_graph(polygons, weights, original_split, is_contiguous, weight_attr)
+    graph = polygon_collection_to_graph(polygons, weights, split, is_contiguous, weight_attr)
     tpweights = [(d,) for d in division]
     partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
 
@@ -676,14 +671,14 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, origi
     return partition_collection
 
 
-def polygon_collection_to_graph(polygon_collection, weights, original_split, is_contiguous, weight_attr="weight"):
+def polygon_collection_to_graph(polygon_collection, weights, split, is_contiguous, weight_attr="weight"):
     """ Convert collection of polygons to networkx graph
 
     Conversion of a polygon collection into a graph allows
     later graph partitioning
     :param polygon_collection:
     :param weights: weight of each polygon in collection
-    :param original_split: "katana" or "hexana"
+    :param split: split function
     :param is_contiguous: True or False (metis options)
     :param weight_attr: name of weight attribute
     :return:
@@ -691,7 +686,7 @@ def polygon_collection_to_graph(polygon_collection, weights, original_split, is_
     if not is_iterable(polygon_collection):
         raise TypeError("Input must be a collection but is '{}'".format(type(polygon_collection)))
 
-    if original_split == "katana":
+    if 'katana' in split.__name__:
         is_katana = True
     else:
         is_katana = False
