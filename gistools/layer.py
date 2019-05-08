@@ -975,7 +975,7 @@ class PolygonLayer(GeoLayer):
     Geo layer of polygons
     """
 
-    _partition_methods = {'area': area_partition_polygon}
+    # _partition_methods = {'area': area_partition_polygon}
     _split_methods = {'katana_simple': katana, 'katana_centroid': katana_centroid, 'fishnet': fishnet, 'hexana': hexana}
     _split_threshold = 'area'
     _geometry_class = Polygon
@@ -1129,39 +1129,8 @@ class PolygonLayer(GeoLayer):
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
                          self.geometry])
 
-    @return_new_instance
-    def partition(self, threshold, weight_attr="area", disaggregation_factor=16, metric_precision=100, recursive=False,
-                  split_method="katana", **metis_options):
-        """ Partition polygon layer using graph theory
-
-        :param threshold: surface threshold for polygon partitioning
-        :param weight_attr: sub polygon weight key ("area", "length") for partitioning
-        :param disaggregation_factor: disaggregation before re-aggregating
-        :param metric_precision: metric precision for partitioning
-        :param recursive:
-        :param split_method:
-        :param metis_options: optional arguments specific to METIS
-        :return:
-        """
-        split_method = check_string(split_method, self._split_methods.keys())
-
-        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-        append_bool = np.full(len(self), False)
-        for idx, geometry in enumerate(self.geometry):
-            if geometry.area > threshold:
-                multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                new_geom = self._partition_methods[weight_attr](
-                    geometry, threshold, disaggregation_factor=disaggregation_factor, precision=metric_precision,
-                    recursive=recursive, split=split_method, **metis_options)
-                multdf = multdf.append([self._gpd_df.iloc[idx]] * len(new_geom), ignore_index=True)
-                multdf.geometry = new_geom
-                outdf = outdf.append(multdf, ignore_index=True)
-            else:
-                append_bool[idx] = True
-
-        outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
-
-        return outdf
+    def rpartition(self, nparts):
+        pass
 
     def shape_factor(self, convex_hull=True):
         """ Return shape factor series
@@ -1180,6 +1149,40 @@ class PolygonLayer(GeoLayer):
         :return:
         """
         return super().split(threshold, method, no_multipart)
+
+    @return_new_instance
+    def split_into_equal_areas(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
+                               split_method="hexana", **metis_options):
+        """ Split polygon layer into sub-polygons with equal areas
+
+        Split polygons using graph partitioning theory
+        :param threshold: surface threshold for polygon partitioning
+        :param disaggregation_factor: disaggregation before re-aggregating
+        :param precision: metric precision for partitioning
+        :param recursive:
+        :param split_method: method used to split polygons beforehand
+        :param metis_options: optional arguments specific to METIS partitioning package
+        :return:
+        """
+        split_method = check_string(split_method, self._split_methods.keys())
+
+        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
+        append_bool = np.full(len(self), False)
+        for idx, geometry in enumerate(self.geometry):
+            if geometry.area > threshold:
+                multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
+                new_geom = area_partition_polygon(
+                    geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
+                    recursive=recursive, split=self._split_methods[split_method], **metis_options)
+                multdf = multdf.append([self._gpd_df.iloc[idx]] * len(new_geom), ignore_index=True)
+                multdf.geometry = new_geom
+                outdf = outdf.append(multdf, ignore_index=True)
+            else:
+                append_bool[idx] = True
+
+        outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
+
+        return outdf
 
     @property
     def area(self):
@@ -1383,3 +1386,22 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
+
+
+if __name__ == '__main__':
+    from gistools.utils.sys.timer import Timer
+    from matplotlib import pyplot as plt
+    test = PolygonLayer("/home/benjamin/Documents/Data/Parc amazonien/enp_pn_s_973.shp")
+    # test = test[[2]].to_crs(32622)
+    with Timer() as t:
+        # split_test = test.split(50000000/20, "hexana")
+        test = test.split_into_equal_areas(1000000000, disaggregation_factor=20, precision=1000, split_method="hexana",
+                                           contig=True, ncuts=2)
+    print("spend time: %s" % t)
+    test["attr"] = np.random.randint(1000, size=(len(test),))
+    test["area"] = test.area
+    # split_test.plot()
+    # plt.show()
+    test.plot(attribute="area")
+    plt.show()
+    print(test.area)
