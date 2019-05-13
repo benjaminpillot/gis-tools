@@ -13,8 +13,9 @@ __email__ = 'benjaminpillot@riseup.net'
 
 import numpy as np
 from numpy import sin, pi, sqrt, abs
+from utils.check.type import check_type
+
 from gistools.coordinates import Ellipsoid
-from gistools.utils.check.type import check_type
 
 
 def compute_surface(lb_pixel, rb_pixel, ub_pixel, bb_pixel, geo_type: str, ellipsoid: Ellipsoid):

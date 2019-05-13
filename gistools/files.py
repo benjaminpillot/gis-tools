@@ -9,8 +9,7 @@ More detailed description.
 # __version__ = '0.1'
 import os
 from tempfile import mkstemp, gettempdir
-
-from gistools.utils.check.type import isfile
+from utils.check.type import isfile
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

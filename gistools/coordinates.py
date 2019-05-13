@@ -21,10 +21,10 @@ from rtree import index
 from gistools.projections import proj4_from_raster
 from gistools.exceptions import GeoGridError, GeoGridWarning
 
-from gistools.utils.check.descriptor import protected_property
-from gistools.utils.check.type import type_assert, check_type, is_iterable
-from gistools.utils.check.value import check_string, check_file
-from gistools.utils.sys.reader import read_hdr
+from utils.check.descriptor import protected_property
+from utils.check.type import type_assert, check_type, is_iterable
+from utils.check.value import check_string, check_file
+from utils.sys.reader import read_hdr
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2017, Benjamin Pillot'

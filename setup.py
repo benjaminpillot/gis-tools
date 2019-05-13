@@ -16,6 +16,7 @@ setup(name='gis_tools',
                         "fiona>=1.7.13",
                         "gdal>=2.2.4",
                         "geopandas>=0.4.0",
+                        "greece-utils>=0.1.0"
                         "matplotlib>=3.0.3",
                         "metis>=0.2a4",
                         "networkx>=2.1",

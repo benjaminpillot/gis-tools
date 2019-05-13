@@ -24,6 +24,9 @@ from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from pandas import concat
 from shapely.ops import cascaded_union
+from utils.toolset import split_list_by_index
+from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
+from utils.check.value import check_sub_collection_in_collection
 
 from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
@@ -35,9 +38,6 @@ from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points
     area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
-from gistools.utils.toolset import split_list_by_index
-from gistools.utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
-from gistools.utils.check.value import check_sub_collection_in_collection
 
 # __all__ = []
 # __version__ = '0.1'

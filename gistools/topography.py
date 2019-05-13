@@ -12,6 +12,7 @@ __email__ = 'benjaminpillot@riseup.net'
 
 
 import numpy as np
+
 from gistools.coordinates import Ellipsoid
 
 

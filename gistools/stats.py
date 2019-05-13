@@ -8,13 +8,13 @@ More detailed description.
 # __all__ = []
 # __version__ = '0.1'
 from math import sqrt as msqrt
+from utils.check.type import type_assert, check_type_in_collection
 
 import numpy as np
 
 from gistools.layer import GeoLayer
 from gistools.exceptions import ZonalStatisticsError
 from gistools.raster import RasterMap
-from gistools.utils.check.type import type_assert, check_type_in_collection
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

@@ -22,6 +22,9 @@ import copy
 import numpy as np
 from osgeo import gdal, ogr
 from matplotlib import pyplot as plt
+from utils.check.type import check_type, collection_type_assert, type_assert, isfile
+from utils.check.descriptor import protected_property
+from utils.check.value import check_string
 
 from gistools.coordinates import GeoGrid
 from gistools.conversion import raster_to_array, array_to_raster
@@ -30,9 +33,6 @@ from gistools.files import RasterTempFile, ShapeTempFile
 from gistools.layer import PolygonLayer, check_proj
 from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
 from gistools.surface import compute_surface
-from gistools.utils.check.type import check_type, collection_type_assert, type_assert, isfile
-from gistools.utils.check.descriptor import protected_property
-from gistools.utils.check.value import check_string
 
 __all__ = ["RasterMap", "DigitalElevationModel"]
 __version__ = '0.1'

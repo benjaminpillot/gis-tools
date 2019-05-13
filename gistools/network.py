@@ -14,15 +14,15 @@ import numpy as np
 from geopandas import GeoDataFrame
 from shapely.geometry import Point, LineString
 from shapely.ops import linemerge
+from utils.toolset import split_list_by_index
+from utils.check.descriptor import protected_property
+from utils.check.type import check_type, type_assert, check_type_in_collection
+from utils.check.value import check_string
 
 from gistools.coordinates import r_tree_idx
 from gistools.exceptions import EdgeError, NetworkError, RoadError, RoadNodeError
 from gistools.geometry import connect_lines_to_point, centroid, intersects
 from gistools.layer import return_new_instance, LineLayer, PointLayer
-from gistools.utils.toolset import split_list_by_index
-from gistools.utils.check.descriptor import protected_property
-from gistools.utils.check.type import check_type, type_assert, check_type_in_collection
-from gistools.utils.check.value import check_string
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

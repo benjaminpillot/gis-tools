@@ -16,10 +16,10 @@ from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
 from shapely.ops import cascaded_union, linemerge, unary_union
+from utils.check.type import is_iterable, type_assert
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
-from gistools.utils.check.type import is_iterable, type_assert
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'

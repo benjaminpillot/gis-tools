@@ -14,9 +14,8 @@ import fiona.crs
 import pyproj
 
 from osgeo import gdal, osr, ogr
-
-from gistools.utils.check.type import type_assert
-from gistools.utils.check.value import check_file
+from utils.check.type import type_assert
+from utils.check.value import check_file
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
