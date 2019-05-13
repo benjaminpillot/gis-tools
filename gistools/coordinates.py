@@ -13,7 +13,6 @@ import pyproj
 import numpy as np
 import warnings
 import geopandas as gpd
-from abc import ABCMeta, abstractmethod
 from cpc.geogrids import Geogrid
 from osgeo import gdal
 from pyproj import Proj
@@ -22,8 +21,7 @@ from rtree import index
 from gistools.projections import proj4_from_raster
 from gistools.exceptions import GeoGridError, GeoGridWarning
 
-from gistools.utils.check.descriptor import CheckedMeta, BoundedFloat, Float, RangeFloat, CollectionOfBoundedFloats, \
-    CollectionOfFloats, CollectionOfRangeFloats, protected_property
+from gistools.utils.check.descriptor import protected_property
 from gistools.utils.check.type import type_assert, check_type, is_iterable
 from gistools.utils.check.value import check_string, check_file
 from gistools.utils.sys.reader import read_hdr
@@ -79,103 +77,6 @@ class Ellipsoid:
     @property
     def model(self):
         return self._model
-
-
-class _SpecialMeta(ABCMeta, CheckedMeta):
-    pass
-
-
-class LocationBase(metaclass=_SpecialMeta):
-
-    @property
-    @abstractmethod
-    def latitude(self):
-        pass
-
-    @property
-    @abstractmethod
-    def longitude(self):
-        pass
-
-    @property
-    @abstractmethod
-    def altitude(self):
-        pass
-
-    @property
-    @abstractmethod
-    def time_zone(self):
-        pass
-
-
-class Location(LocationBase):
-    """ Location class instance
-
-    Store geo coordinates of a specific location point
-
-    :Example:
-        * Define Location with default time zone (0)
-        >>> loc = Location(42., 9., 100.)
-    """
-    _latitude = BoundedFloat(min=-90, max=90)
-    _longitude = BoundedFloat(min=-180, max=180)
-    _altitude = Float()
-    _time_zone = RangeFloat(range=TIME_ZONE)
-
-    def __init__(self, latitude, longitude, altitude, time_zone=0.):
-        self._latitude = latitude
-        self._longitude = longitude
-        self._altitude = altitude
-        self._time_zone = time_zone
-
-    @property
-    def latitude(self):
-        return self._latitude
-
-    @property
-    def longitude(self):
-        return self._longitude
-
-    @property
-    def altitude(self):
-        return self._altitude
-
-    @property
-    def time_zone(self):
-        return self._time_zone
-
-
-class LocationVector(LocationBase):
-    """ LocationVector class instance
-
-    Store geo coordinates of a specific vector
-    """
-    _latitude = CollectionOfBoundedFloats(min=-90, max=90)
-    _longitude = CollectionOfBoundedFloats(min=-180, max=180)
-    _altitude = CollectionOfFloats()
-    _time_zone = CollectionOfRangeFloats(range=TIME_ZONE)
-
-    def __init__(self, latitude, longitude, altitude, time_zone):
-        self._latitude = latitude
-        self._longitude = longitude
-        self._altitude = altitude
-        self._time_zone = time_zone
-
-    @property
-    def latitude(self):
-        return self._latitude
-
-    @property
-    def longitude(self):
-        return self._longitude
-
-    @property
-    def altitude(self):
-        return self._altitude
-
-    @property
-    def time_zone(self):
-        return self._time_zone
 
 
 class GeoGrid(Geogrid):
