@@ -11,6 +11,7 @@ More detailed description.
 import numpy as np
 import networkx as nx
 
+from math import sqrt as msqrt
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
@@ -228,7 +229,7 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
     You will probably want to use projected coordinates for this
     """
     if not radius:
-        radius = np.sqrt(area / (2*np.sqrt(3)))
+        radius = msqrt(area / (2*msqrt(3)))
 
     # calculate side length given radius
     sl = (2 * radius) * np.tan(np.pi / 6)

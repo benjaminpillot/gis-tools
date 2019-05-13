@@ -19,7 +19,7 @@ from gistools.coordinates import r_tree_idx
 from gistools.exceptions import EdgeError, NetworkError, RoadError, RoadNodeError
 from gistools.geometry import connect_lines_to_point, centroid, intersects
 from gistools.layer import return_new_instance, LineLayer, PointLayer
-from gistools.toolset.list import split_list_by_index
+from gistools.utils.toolset import split_list_by_index
 from gistools.utils.check.descriptor import protected_property
 from gistools.utils.check.type import check_type, type_assert, check_type_in_collection
 from gistools.utils.check.value import check_string
