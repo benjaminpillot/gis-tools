@@ -17,23 +17,7 @@ GisTools allows some of the following operations:
 
 
 ## Requirements
-In theory, it should run with any equal or earlier version of the following libraries. Please report any issue you might cope with.
-
-* `` cpc.geogrids == 0.2.3 ``
-* `` elevation >= 1.0.5 ``
-* `` fiona >= 1.7.13 ``
-* `` gdal >= 2.2.4 ``
-* `` geopandas >= 0.4.0 ``
-* `` matplotlib >= 3.0.3 ``
-* `` networkx >= 2.1 ``
-* `` numpy >= 1.14.3 ``
-* `` metis == 0.2a4``
-* `` pandas >= 0.24.2``
-* `` pyproj >= 1.9.5 ``
-* `` rasterio >= 1.0.18 ``
-* `` rtree >= 0.8.3 ``
-* `` scipy >= 1.1.0 ``
-* `` shapely >= 1.6.4 ``
+See ``requirements.txt``.
 
 
 ## Install
