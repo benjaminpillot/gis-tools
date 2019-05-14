@@ -11,6 +11,7 @@ import os
 import fiona
 import warnings
 
+import progressbar
 import pyproj
 from copy import copy
 from functools import wraps
@@ -77,7 +78,7 @@ def return_new_instance(method):
     return _return_new_instance
 
 
-# Decorator for wrapping iteration methods over geometries
+# Decorator for wrapping iteration methods over geometries of layer
 def iterate_over_geometry(method):
 
     @wraps(method)
@@ -86,6 +87,19 @@ def iterate_over_geometry(method):
         outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
         append_bool = np.full(len(self), False)
 
+        # Display progress bar in console if necessary
+        try:
+            show_progressbar = kwargs["show_progressbar"]
+        except KeyError:
+            show_progressbar = False
+        if show_progressbar:
+            widgets = [method.__name__.lstrip('_'), ': ',  progressbar.Percentage(), ' ', progressbar.Bar(marker='#'),
+                       ' ', progressbar.ETA()]
+            bar = progressbar.ProgressBar(widgets=widgets, max_value=len(self)).start()
+        else:
+            bar = None
+
+        # Begin iteration over geometries
         for idx, geometry in enumerate(self.geometry):
             new_geometry = method(self, geometry, *args, **kwargs)
             if new_geometry:
@@ -94,6 +108,12 @@ def iterate_over_geometry(method):
                 outdf = outdf.append(multdf, ignore_index=True)
             else:
                 append_bool[idx] = True
+
+            if show_progressbar:
+                bar.update(idx)
+
+        if show_progressbar:
+            bar.finish()
 
         return outdf.append(self._gpd_df[append_bool], ignore_index=True)
     return wrapper
@@ -170,6 +190,19 @@ class GeoLayer:
         self._polygon_layer_class = PolygonLayer  # Corresponding polygon layer class/subclass
         self._line_layer_class = LineLayer  # Line layer class/subclass corresponding to given layer class/subclass
         self.name = name
+
+    @iterate_over_geometry
+    def _explode(self, geometry):
+        if type(geometry) == self._multi_geometry_class:
+            return list(geometry)
+
+    @iterate_over_geometry
+    def _split(self, geometry, threshold, method, no_multipart, show_progressbar):
+        if geometry.__getattribute__(self._split_threshold) > threshold:
+            split_geom = self._split_methods[method](geometry, threshold)
+            if no_multipart:
+                split_geom = explode(split_geom)
+            return split_geom
 
     @return_new_instance
     def add_points_to_geometry(self, distance):
@@ -345,16 +378,14 @@ class GeoLayer:
 
         return outdf
 
-    @iterate_over_geometry
-    def explode(self, geometry):
+    def explode(self):
         """ Explode "multi" geometry into "single"
 
         Note that this is the faster tested method...
         Thanks to https://gist.github.com/mhweber/cf36bb4e09df9deee5eb54dc6be74d26
         :return:
         """
-        if type(geometry) == self._multi_geometry_class:
-            return list(geometry)
+        return self._explode()
 
     def get_underlying_points_as_new_layer(self, location=None):
         """ Get underlying points constituting the layer as a new PointLayer instance
@@ -706,29 +737,19 @@ class GeoLayer:
         # When doing the spatial join, we drop the "index_right" column added by Geopandas
         return gpd.sjoin(self._gpd_df, other._gpd_df, how="left", op=op).drop("index_right", axis=1)
 
-    @iterate_over_geometry
-    def _split(self, geometry, threshold, method, no_multipart):
-        if geometry.__getattribute__(self._split_threshold) > threshold:
-            split_geom = self._split_methods[method](geometry, threshold)
-            if no_multipart:
-                split_geom = explode(split_geom)
-            return split_geom
-
-    def split(self, threshold, method=None, no_multipart=None):
+    def split(self, threshold, method=None, no_multipart=None, show_progressbar=False):
         """ Split geometry
 
-        :param threshold: surface threshold
+        :param threshold: threshold
         :param method: method used to split geometry
         :param no_multipart: (bool) should resulting geometry be single-part (no multi-part) ?
+        :param show_progressbar: show progress bar in console for long iterations
         :return:
         """
 
-        if self._geom_type == 'Point':
-            return self.copy()
-
         method = check_string(method, self._split_methods.keys())
 
-        return self._split(threshold, method, no_multipart)
+        return self._split(threshold, method, no_multipart, show_progressbar=show_progressbar)
 
     def to_array(self, geo_grid: GeoGrid, attribute, data_type='uint8', all_touched=False):
         """ Convert layer to numpy array
@@ -974,6 +995,14 @@ class PolygonLayer(GeoLayer):
         if self._geom_type != 'Polygon':
             raise PolygonLayerError("Geometry must be 'Polygon' but is '{}'".format(self._geom_type))
 
+    @iterate_over_geometry
+    def _split_into_equal_areas(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
+                                **metis_options):
+        if geometry.area > threshold:
+            return area_partition_polygon(
+                geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
+                recursive=recursive, split=self._split_methods[split_method], **metis_options)
+
     def attr_area(self, other, attr_name: str, normalized: bool = False):
         """ Area of attribute from other PolygonLayer in current layer
 
@@ -1140,23 +1169,16 @@ class PolygonLayer(GeoLayer):
         """
         return [shape_factor(poly, convex_hull) for poly in self.geometry]
 
-    def split(self, threshold, method="katana_simple", no_multipart=False):
-        """
+    def split(self, surface_threshold, method="katana_simple", no_multipart=False, show_progressbar=False):
+        """ Split polygons into layer with respect to surface threshold
 
-        :param threshold:
-        :param method:
-        :param no_multipart:
+        :param surface_threshold: surface threshold
+        :param method: method used to split polygons {'katana_simple', 'katana_centroid', 'hexana'}
+        :param no_multipart: (bool) should resulting geometry be single-part (no multi-part) ?
+        :param show_progressbar: (bool) show progress bar in console for long iterations
         :return:
         """
-        return super().split(threshold, method, no_multipart)
-
-    @iterate_over_geometry
-    def _split_into_equal_areas(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
-                                **metis_options):
-        if geometry.area > threshold:
-            return area_partition_polygon(
-                geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
-                recursive=recursive, split=self._split_methods[split_method], **metis_options)
+        return super().split(surface_threshold, method, no_multipart, show_progressbar)
 
     def split_into_equal_areas(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
                                split_method="hexana", **metis_options):
@@ -1298,15 +1320,16 @@ class LineLayer(GeoLayer):
 
         return slope
 
-    def split(self, threshold, method="cut", no_multipart=False):
-        """
+    def split(self, length_threshold, method="cut", no_multipart=False, show_progressbar=False):
+        """ Split lines according to length
 
-        :param threshold:
-        :param method:
+        :param length_threshold: length threshold
+        :param method: {'cut', 'cut_'}
         :param no_multipart:
+        :param show_progressbar:
         :return:
         """
-        return super().split(threshold, method, no_multipart)
+        return super().split(length_threshold, method, no_multipart, show_progressbar)
 
     def split_at_intersections(self):
         # TODO: split lines with lines. Cut lines at any intersection point of the layer
