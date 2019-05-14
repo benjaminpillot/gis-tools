@@ -77,6 +77,28 @@ def return_new_instance(method):
     return _return_new_instance
 
 
+# Decorator for wrapping iteration methods over geometries
+def iterate_over_geometry(method):
+
+    @wraps(method)
+    @return_new_instance
+    def wrapper(self, *args, **kwargs):
+        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
+        append_bool = np.full(len(self), False)
+
+        for idx, geometry in enumerate(self.geometry):
+            new_geometry = method(self, geometry, *args, **kwargs)
+            if new_geometry:
+                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geometry), ignore_index=True)
+                multdf.geometry = new_geometry
+                outdf = outdf.append(multdf, ignore_index=True)
+            else:
+                append_bool[idx] = True
+
+        return outdf.append(self._gpd_df[append_bool], ignore_index=True)
+    return wrapper
+
+
 class GeoLayer:
     """ GeoLayer base class
 
@@ -323,27 +345,16 @@ class GeoLayer:
 
         return outdf
 
-    @return_new_instance
-    def explode(self):
+    @iterate_over_geometry
+    def explode(self, geometry):
         """ Explode "multi" geometry into "single"
 
         Note that this is the faster tested method...
         Thanks to https://gist.github.com/mhweber/cf36bb4e09df9deee5eb54dc6be74d26
         :return:
         """
-        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-        append_bool = np.full(len(self), False)
-        for idx, geometry in enumerate(self.geometry):
-            if type(geometry) == self._geometry_class:
-                append_bool[idx] = True
-            if type(geometry) == self._multi_geometry_class:
-                outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
-                append_bool[append_bool] = False
-                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(geometry), ignore_index=True)
-                multdf.geometry = list(geometry)
-                outdf = outdf.append(multdf, ignore_index=True)
-
-        return outdf.append(self._gpd_df[append_bool])
+        if type(geometry) == self._multi_geometry_class:
+            return list(geometry)
 
     def get_underlying_points_as_new_layer(self, location=None):
         """ Get underlying points constituting the layer as a new PointLayer instance
@@ -684,22 +695,6 @@ class GeoLayer:
         outdf.geometry = outdf.geometry.simplify(tolerance)
         return outdf
 
-    # TODO: use the 'dissolve' method instead
-    # @return_new_instance
-    # def singlepart_to_multipart(self, attribute):
-    #     """ Convert singlepart to multipart geometry with respect to attribute value
-    #
-    #     :param attribute:
-    #     :return:
-    #     """
-    #     outdf = gpd.GeoDataFrame(columns=[attribute, "geometry"], crs=self.crs)
-    #
-    #     for n, val in enumerate(set(self._gpd_df[attribute])):
-    #         outdf.loc[n, attribute] = val
-    #         outdf.geometry[n] = self._multi_geometry_class([geom for geom in self.geometry[self[attribute] == val]])
-    #
-    #     return outdf
-
     @return_new_instance
     def sjoin(self, other, op="intersects"):
         """ Spatial join with another layer
@@ -711,7 +706,14 @@ class GeoLayer:
         # When doing the spatial join, we drop the "index_right" column added by Geopandas
         return gpd.sjoin(self._gpd_df, other._gpd_df, how="left", op=op).drop("index_right", axis=1)
 
-    @return_new_instance
+    @iterate_over_geometry
+    def _split(self, geometry, threshold, method, no_multipart):
+        if geometry.__getattribute__(self._split_threshold) > threshold:
+            split_geom = self._split_methods[method](geometry, threshold)
+            if no_multipart:
+                split_geom = explode(split_geom)
+            return split_geom
+
     def split(self, threshold, method=None, no_multipart=None):
         """ Split geometry
 
@@ -726,23 +728,7 @@ class GeoLayer:
 
         method = check_string(method, self._split_methods.keys())
 
-        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-        append_bool = np.full(len(self), False)
-        for idx, geometry in enumerate(self.geometry):
-            if geometry.__getattribute__(self._split_threshold) <= threshold:
-                append_bool[idx] = True
-            else:
-                multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                split_geom = self._split_methods[method](geometry, threshold)
-                if no_multipart:
-                    split_geom = explode(split_geom)
-                multdf = multdf.append([self._gpd_df.iloc[idx]]*len(split_geom), ignore_index=True)
-                multdf.geometry = split_geom
-                outdf = outdf.append(multdf, ignore_index=True)
-
-        outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
-
-        return outdf
+        return self._split(threshold, method, no_multipart)
 
     def to_array(self, geo_grid: GeoGrid, attribute, data_type='uint8', all_touched=False):
         """ Convert layer to numpy array
@@ -1129,8 +1115,22 @@ class PolygonLayer(GeoLayer):
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
                          self.geometry])
 
-    def rpartition(self, nparts):
+    def partition(self, *args, **kwargs):
         pass
+
+    def rpartition(self, raster, nparts, parameter="sum", disaggregation_factor=16, split_method="hexana",
+                   **metis_options):
+        """ Partition polygons using corresponding raster statistics
+
+        :param raster: RasterMap class instance
+        :param nparts: number of resulting parts of partition
+        :param parameter: parameter to extract from raster (see ZonalStatistics method's names)
+        :param disaggregation_factor: disaggregation
+        :param split_method: method used to split polygons beforehand
+        :param metis_options: optional arguments specific to METIS partitioning package
+        :return:
+        """
+        split_method = check_string(split_method, self._split_methods.keys())
 
     def shape_factor(self, convex_hull=True):
         """ Return shape factor series
@@ -1150,12 +1150,19 @@ class PolygonLayer(GeoLayer):
         """
         return super().split(threshold, method, no_multipart)
 
-    @return_new_instance
+    @iterate_over_geometry
+    def _split_into_equal_areas(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
+                                **metis_options):
+        if geometry.area > threshold:
+            return area_partition_polygon(
+                geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
+                recursive=recursive, split=self._split_methods[split_method], **metis_options)
+
     def split_into_equal_areas(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
                                split_method="hexana", **metis_options):
         """ Split polygon layer into sub-polygons with equal areas
 
-        Split polygons using graph partitioning theory
+        Split polygons into equal areas using graph partitioning theory
         :param threshold: surface threshold for polygon partitioning
         :param disaggregation_factor: disaggregation before re-aggregating
         :param precision: metric precision for partitioning
@@ -1166,23 +1173,8 @@ class PolygonLayer(GeoLayer):
         """
         split_method = check_string(split_method, self._split_methods.keys())
 
-        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-        append_bool = np.full(len(self), False)
-        for idx, geometry in enumerate(self.geometry):
-            if geometry.area > threshold:
-                multdf = gpd.GeoDataFrame(columns=self._gpd_df.columns)
-                new_geom = area_partition_polygon(
-                    geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
-                    recursive=recursive, split=self._split_methods[split_method], **metis_options)
-                multdf = multdf.append([self._gpd_df.iloc[idx]] * len(new_geom), ignore_index=True)
-                multdf.geometry = new_geom
-                outdf = outdf.append(multdf, ignore_index=True)
-            else:
-                append_bool[idx] = True
-
-        outdf = outdf.append(self._gpd_df[append_bool], ignore_index=True)
-
-        return outdf
+        return self._split_into_equal_areas(threshold, disaggregation_factor, precision, recursive, split_method,
+                                            **metis_options)
 
     @property
     def area(self):
