@@ -1144,8 +1144,8 @@ class PolygonLayer(GeoLayer):
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
                          self.geometry])
 
-    def partition(self, *args, **kwargs):
-        pass
+    # def partition(self, *args, **kwargs):
+    #     pass
 
     def rpartition(self, raster, nparts, parameter="sum", disaggregation_factor=16, split_method="hexana",
                    **metis_options):
@@ -1180,8 +1180,8 @@ class PolygonLayer(GeoLayer):
         """
         return super().split(surface_threshold, method, no_multipart, show_progressbar)
 
-    def split_into_equal_areas(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
-                               split_method="hexana", **metis_options):
+    def partition(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
+                  split_method="hexana", **metis_options):
         """ Split polygon layer into sub-polygons with equal areas
 
         Split polygons into equal areas using graph partitioning theory
