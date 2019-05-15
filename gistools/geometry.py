@@ -395,7 +395,8 @@ def join(geometry_collection):
 
                 if len(union) > 0:
                     # TODO: use "no_artifact_unary_union" function
-                    joint.append(cascaded_union(union))
+                    # joint.append(cascaded_union(union))
+                    joint.append(no_artifact_unary_union(union))
 
                 for ix in list_of_truly_intersecting_features:
                     idx.delete(ix, geometry_collection[ix].bounds)
