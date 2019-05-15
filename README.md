@@ -68,6 +68,6 @@ Split a polygon layer into sub-polygons of equal area with respect to
 honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
 ```
 >>> polygon_layer = gistools.layer.PolygonLayer("path/to/layer.geojson")
->>> new_partitioned_layer = polygon_layer.split_into_equal_areas(threshold=2000, disaggregation_factor=20, 
+>>> new_partitioned_layer = polygon_layer.partition(threshold=2000, disaggregation_factor=20, 
                                                     split_method="hexana", contig=True)
 ```
