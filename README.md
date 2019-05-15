@@ -27,7 +27,7 @@ Pip installation should normally take care of everything for you.
 
 The easiest way to install GisTools is using ``pip`` in a terminal
 ```
-$ pip install gis_tools
+$ pip install gis-tools
 ```
 
 
