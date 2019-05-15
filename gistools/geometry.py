@@ -294,6 +294,59 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
     return polygons
 
 
+def mesh(startx, starty, endx, endy, side=None, area=None):
+    """ Compute a mesh grid
+
+    :param startx:
+    :param starty:
+    :param endx:
+    :param endy:
+    :param side:
+    :param area:
+    :return:
+    """
+    if not side:
+        side = msqrt(area)
+
+    startx = startx - side/2
+    starty = starty - side/2
+    endx = endx + side/2
+    endy = endy + side/2
+
+    polygons = []
+    while starty < endy:
+        while startx < endx:
+            poly = [
+                (startx, starty),
+                (startx, starty + side),
+                (startx + side, starty + side),
+                (startx + side, starty)]
+            polygons.append(Polygon(poly))
+            startx += side
+        starty += side
+
+    return polygons
+
+
+def polygon_to_mesh(polygon, threshold, method):
+    """
+
+    :param polygon:
+    :param threshold:
+    :param method: {'hexana', 'fishnet'}
+    :return:
+    """
+    grid = method(*polygon.bounds, area=threshold)
+    split = []
+    for unit in grid:
+        if unit.within(polygon):
+            split.append(unit)
+        elif unit.overlaps(polygon):
+            split.append(unit.intersection(polygon))
+
+    return explode(split)
+
+
 def fishnet(polygon, threshold):
     """ Intersect polygon with a regular grid or "fishnet"
 
@@ -301,8 +354,7 @@ def fishnet(polygon, threshold):
     :param threshold:
     :return:
     """
-    # TODO: implement fishnet split operation
-    pass
+    return polygon_to_mesh(polygon, threshold, mesh)
 
 
 def hexana(polygon, threshold):
@@ -312,15 +364,16 @@ def hexana(polygon, threshold):
     :param threshold: unit hexagon surface
     :return: list of polygons
     """
-    honey_grid = honeycomb(*polygon.bounds, area=threshold)
-    hexa_split = []
-    for hexagon in honey_grid:
-        if hexagon.within(polygon):
-            hexa_split.append(hexagon)
-        elif hexagon.overlaps(polygon):
-            hexa_split.append(hexagon.intersection(polygon))
-
-    return explode(hexa_split)
+    return polygon_to_mesh(polygon, threshold, honeycomb)
+    # honey_grid = honeycomb(*polygon.bounds, area=threshold)
+    # hexa_split = []
+    # for hexagon in honey_grid:
+    #     if hexagon.within(polygon):
+    #         hexa_split.append(hexagon)
+    #     elif hexagon.overlaps(polygon):
+    #         hexa_split.append(hexagon.intersection(polygon))
+    #
+    # return explode(hexa_split)
 
 
 def intersecting_features(geometry, geometry_collection, r_tree=None):
@@ -815,7 +868,7 @@ def split_collection(geometry_collection, threshold, method, get_explode):
 
     for geom in geometry_collection:
         try:
-            new_collection.extend(method(geometry_collection, threshold))
+            new_collection.extend(method(geom, threshold))
         except TopologicalError:
             new_collection.append(geom)
 
