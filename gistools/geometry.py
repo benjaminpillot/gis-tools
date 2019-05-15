@@ -312,9 +312,11 @@ def mesh(startx, starty, endx, endy, side=None, area=None):
     starty = starty - side/2
     endx = endx + side/2
     endy = endy + side/2
+    origx = startx
 
     polygons = []
     while starty < endy:
+        startx = origx
         while startx < endx:
             poly = [
                 (startx, starty),
