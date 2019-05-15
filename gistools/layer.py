@@ -101,7 +101,7 @@ def iterate_over_geometry(method):
 
         # Begin iteration over geometries
         for idx, geometry in enumerate(self.geometry):
-            new_geometry = method(self, geometry, *args, **kwargs)
+            new_geometry = method(self, geometry, *args, **kwargs)  # Call method here
             if new_geometry:
                 multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geometry), ignore_index=True)
                 multdf.geometry = new_geometry
@@ -381,7 +381,6 @@ class GeoLayer:
     def explode(self):
         """ Explode "multi" geometry into "single"
 
-        Note that this is the faster tested method...
         Thanks to https://gist.github.com/mhweber/cf36bb4e09df9deee5eb54dc6be74d26
         :return:
         """
@@ -561,7 +560,6 @@ class GeoLayer:
         :param other:
         :return:
         """
-
         return self._distance_and_nearest_neighbor(other, True)[1]
 
     def nearest_neighbors(self, other, buffer_distance):
@@ -996,8 +994,8 @@ class PolygonLayer(GeoLayer):
             raise PolygonLayerError("Geometry must be 'Polygon' but is '{}'".format(self._geom_type))
 
     @iterate_over_geometry
-    def _split_into_equal_areas(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
-                                **metis_options):
+    def _partition(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
+                   show_progressbar, **metis_options):
         if geometry.area > threshold:
             return area_partition_polygon(
                 geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
@@ -1144,8 +1142,24 @@ class PolygonLayer(GeoLayer):
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
                          self.geometry])
 
-    # def partition(self, *args, **kwargs):
-    #     pass
+    def partition(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
+                  split_method="hexana", show_progressbar=False, **metis_options):
+        """ Split polygon layer into sub-polygons with equal areas
+
+        Split polygons into equal areas using graph partitioning theory
+        :param threshold: surface threshold for polygon partitioning
+        :param disaggregation_factor: disaggregation before re-aggregating
+        :param precision: metric precision for partitioning
+        :param recursive:
+        :param split_method: method used to split polygons beforehand
+        :param show_progressbar: (bool) show progress bar if necessary
+        :param metis_options: optional arguments specific to METIS partitioning package
+        :return:
+        """
+        split_method = check_string(split_method, self._split_methods.keys())
+
+        return self._partition(threshold, disaggregation_factor, precision, recursive, split_method,
+                               show_progressbar=show_progressbar, **metis_options)
 
     def rpartition(self, raster, nparts, parameter="sum", disaggregation_factor=16, split_method="hexana",
                    **metis_options):
@@ -1179,24 +1193,6 @@ class PolygonLayer(GeoLayer):
         :return:
         """
         return super().split(surface_threshold, method, no_multipart, show_progressbar)
-
-    def partition(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
-                  split_method="hexana", **metis_options):
-        """ Split polygon layer into sub-polygons with equal areas
-
-        Split polygons into equal areas using graph partitioning theory
-        :param threshold: surface threshold for polygon partitioning
-        :param disaggregation_factor: disaggregation before re-aggregating
-        :param precision: metric precision for partitioning
-        :param recursive:
-        :param split_method: method used to split polygons beforehand
-        :param metis_options: optional arguments specific to METIS partitioning package
-        :return:
-        """
-        split_method = check_string(split_method, self._split_methods.keys())
-
-        return self._split_into_equal_areas(threshold, disaggregation_factor, precision, recursive, split_method,
-                                            **metis_options)
 
     @property
     def area(self):
