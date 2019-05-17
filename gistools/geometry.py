@@ -605,10 +605,8 @@ def mask(polygon_collection, mask_collection, fast_intersection_surface):
             else:
                 result.append(geom)
 
-    # No multipolygons and join overlapping ones
-    # result = explode(result)
+    # Join coincident polygons
     result = join(result)
-    result = explode(result)
 
     return result
 
