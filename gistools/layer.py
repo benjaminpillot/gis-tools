@@ -185,7 +185,7 @@ class GeoLayer:
         # Set attributes
         self._geom_type = geometry[0]
         self._gpd_df = gpd_df
-        self._r_tree_idx = None  # Set to None at creation (only compute the first time it is called)
+        # self._r_tree_idx = None  # Set to None at creation (only compute the first time it is called)
         self._point_layer_class = PointLayer  # Point layer class/subclass corresponding to given layer class/subclass
         self._polygon_layer_class = PolygonLayer  # Corresponding polygon layer class/subclass
         self._line_layer_class = LineLayer  # Line layer class/subclass corresponding to given layer class/subclass
