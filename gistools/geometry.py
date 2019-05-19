@@ -36,6 +36,65 @@ def add_points_to_line(line, threshold):
     return linemerge(cut_(line, threshold))
 
 
+def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split, recursive, **metis_options):
+    """ Aggregate polygons into partitions
+
+    :param polygons: polygons to aggregate
+    :param weights: polygons' corresponding weight
+    :param nparts: number of partitions
+    :param division: list of final relative weights of each partition
+    :param weight_attr:
+    :param split:
+    :param recursive:
+    :param metis_options:
+    :return:
+    """
+    if "contig" not in metis_options.keys():
+        metis_options["contig"] = False
+    graph = polygon_collection_to_graph(polygons, weights, split, metis_options["contig"], weight_attr)
+    tpweights = [(d,) for d in division]
+    partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
+
+    # Return unions of polygons belonging to each part
+    return [no_artifact_unary_union([polygons[n] for n in part]) for part in partition]
+
+    # partition_collection = []
+    # for part in partition:
+    #     partition_collection.append(no_artifact_unary_union([polygons[n] for n in part]))
+
+    # return partition_collection
+
+
+def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split, **metis_options):
+    """ Partition polygon into a subset of polygons of equal area
+
+    :param polygon: polygon intended to be partitioned
+    :param unit_area: area of a sub-polygon
+    :param disaggregation_factor: factor use to discretize polygons before aggregation
+    :param recursive: k-way or recursive method for partitioning
+    :param precision: metric precision for sub-polygon area
+    :param split: function used to split polygon into smaller unit blocks
+    :param metis_options: specific METIS options (see METIS manual)
+    :return:
+    """
+    nparts = int(polygon.area/unit_area)
+
+    if nparts <= 1 and (polygon.area - unit_area) < unit_area/disaggregation_factor:
+        return [polygon]
+
+    # Split polygon into sub-elements
+    split_polygon = split(polygon, unit_area / disaggregation_factor)
+
+    division = [unit_area/polygon.area] * nparts
+    if polygon.area % unit_area != 0:  # and (polygon.area - nparts * unit_area) >= unit_area/disaggregation_factor:
+        division += [(polygon.area - nparts * unit_area)/polygon.area]
+        nparts += 1
+
+    area = [int(poly.area / precision) for poly in split_polygon]
+
+    return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
+
+
 def centroid(point_collection):
     """ Retrieve centroid of multiple points
 
@@ -179,20 +238,48 @@ def cut_at_points(line, points):
     return cut_line
 
 
-def is_in_collection(geometry, geometry_collection, r_tree):
-    """ Test if geometry is present in collection (using shapely 'equals' method)
+def dissolve(geometry_collection):
+    """ Recursively join contiguous geometries in collection
 
-    :param geometry:
     :param geometry_collection:
-    :param r_tree:
     :return:
     """
-    _, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
-    for geom in list_of_intersecting_features:
-        if geometry.equals(geom):
-            return True
+    if not is_iterable(geometry_collection):
+        raise TypeError("Input must be a collection but is '{}'".format(type(geometry_collection)))
 
-    return False
+    while "There is still geometries to aggregate":
+
+        joint = []
+        idx = r_tree_idx(geometry_collection)
+        geom_idx = []
+        increment = 0
+
+        while len(geom_idx) < len(geometry_collection):
+
+            if increment not in geom_idx:
+                geom = geometry_collection[increment]
+                # list_of_intersecting_features = list(idx.intersection(geom.bounds))
+                # list_of_truly_intersecting_features = [n for n in list_of_intersecting_features if
+                #                                        geom.intersects(geometry_collection[n])]
+                # union = [geometry_collection[n] for n in list_of_truly_intersecting_features]
+                union_idx, union = intersecting_features(geom, geometry_collection, idx)
+
+                if len(union) > 0:
+                    joint.append(cascaded_union(union))
+
+                for ix in union_idx:
+                    idx.delete(ix, geometry_collection[ix].bounds)
+
+                geom_idx.extend(union_idx)
+
+            increment += 1
+
+        if len(joint) < len(geometry_collection):
+            geometry_collection = joint
+        else:
+            break
+
+    return joint
 
 
 def explode(geometry_collection):
@@ -212,6 +299,26 @@ def explode(geometry_collection):
             single.append(geom)
 
     return single
+
+
+def fishnet(polygon, threshold):
+    """ Intersect polygon with a regular grid or "fishnet"
+
+    :param polygon:
+    :param threshold:
+    :return:
+    """
+    return polygon_to_mesh(polygon, threshold, mesh)
+
+
+def hexana(polygon, threshold):
+    """ Split a polygon using a honeycomb grid
+
+    :param polygon: original polygon to split
+    :param threshold: unit hexagon surface
+    :return: list of polygons
+    """
+    return polygon_to_mesh(polygon, threshold, honeycomb)
 
 
 # Thanks to https://gist.github.com/urschrei/17cf0be92ca90a244a91
@@ -294,90 +401,6 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
     return polygons
 
 
-def mesh(startx, starty, endx, endy, side=None, area=None):
-    """ Compute a mesh grid
-
-    :param startx:
-    :param starty:
-    :param endx:
-    :param endy:
-    :param side:
-    :param area:
-    :return:
-    """
-    if not side:
-        side = msqrt(area)
-
-    startx = startx - side/2
-    starty = starty - side/2
-    endx = endx + side/2
-    endy = endy + side/2
-    origx = startx
-
-    polygons = []
-    while starty < endy:
-        startx = origx
-        while startx < endx:
-            poly = [
-                (startx, starty),
-                (startx, starty + side),
-                (startx + side, starty + side),
-                (startx + side, starty)]
-            polygons.append(Polygon(poly))
-            startx += side
-        starty += side
-
-    return polygons
-
-
-def polygon_to_mesh(polygon, threshold, method):
-    """
-
-    :param polygon:
-    :param threshold:
-    :param method: {'hexana', 'fishnet'}
-    :return:
-    """
-    grid = method(*polygon.bounds, area=threshold)
-    split = []
-    for unit in grid:
-        if unit.within(polygon):
-            split.append(unit)
-        elif unit.overlaps(polygon):
-            split.append(unit.intersection(polygon))
-
-    return explode(split)
-
-
-def fishnet(polygon, threshold):
-    """ Intersect polygon with a regular grid or "fishnet"
-
-    :param polygon:
-    :param threshold:
-    :return:
-    """
-    return polygon_to_mesh(polygon, threshold, mesh)
-
-
-def hexana(polygon, threshold):
-    """ Split a polygon using a honeycomb grid
-
-    :param polygon: original polygon to split
-    :param threshold: unit hexagon surface
-    :return: list of polygons
-    """
-    return polygon_to_mesh(polygon, threshold, honeycomb)
-    # honey_grid = honeycomb(*polygon.bounds, area=threshold)
-    # hexa_split = []
-    # for hexagon in honey_grid:
-    #     if hexagon.within(polygon):
-    #         hexa_split.append(hexagon)
-    #     elif hexagon.overlaps(polygon):
-    #         hexa_split.append(hexagon.intersection(polygon))
-    #
-    # return explode(hexa_split)
-
-
 def intersecting_features(geometry, geometry_collection, r_tree=None):
     """ Return list of geometries intersecting with given geometry
 
@@ -410,6 +433,22 @@ def intersects(geometry, geometry_collection, r_tree=None):
             range(len(geometry_collection))]
 
 
+def is_in_collection(geometry, geometry_collection, r_tree):
+    """ Test if geometry is present in collection (using shapely 'equals' method)
+
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree:
+    :return:
+    """
+    _, list_of_intersecting_features = intersecting_features(geometry, geometry_collection, r_tree)
+    for geom in list_of_intersecting_features:
+        if geometry.equals(geom):
+            return True
+
+    return False
+
+
 def is_line_connected_to(line, geometry_collection):
     """ Is line connected to one of the geometries in collection ?
 
@@ -420,52 +459,6 @@ def is_line_connected_to(line, geometry_collection):
 
     return [other.intersects(Point(line.coords[0])) for other in geometry_collection], [other.intersects(Point(
         line.coords[-1])) for other in geometry_collection]
-
-
-def join(geometry_collection):
-    """ Join contiguous geometries in collection
-
-    :param geometry_collection:
-    :return:
-    """
-    if not is_iterable(geometry_collection):
-        raise TypeError("Input must be a collection but is '{}'".format(type(geometry_collection)))
-
-    while "There is still geometries to aggregate":
-
-        joint = []
-        idx = r_tree_idx(geometry_collection)
-        geom_idx = []
-        increment = 0
-
-        # TODO: use "intersecting_features" function
-        while len(geom_idx) < len(geometry_collection):
-
-            if increment not in geom_idx:
-                geom = geometry_collection[increment]
-                list_of_intersecting_features = list(idx.intersection(geom.bounds))
-                list_of_truly_intersecting_features = [n for n in list_of_intersecting_features if
-                                                       geom.intersects(geometry_collection[n])]
-                union = [geometry_collection[n] for n in list_of_truly_intersecting_features]
-
-                if len(union) > 0:
-                    # TODO: use "no_artifact_unary_union" function
-                    # joint.append(cascaded_union(union))
-                    joint.append(no_artifact_unary_union(union))
-
-                for ix in list_of_truly_intersecting_features:
-                    idx.delete(ix, geometry_collection[ix].bounds)
-
-                geom_idx.extend(list_of_truly_intersecting_features)
-
-            increment += 1
-
-        if len(joint) < len(geometry_collection):
-            geometry_collection = joint
-        else:
-            break
-
-    return joint
 
 
 def katana(polygon, threshold, count=0):
@@ -582,7 +575,7 @@ def mask(polygon_collection, mask_collection, fast_intersection_surface):
     :return:
     """
 
-    # Retrieve base layer and mask geometry, split it for faster intersection (in 2-km² sub polygons)
+    # Retrieve base layer and mask geometry, split it for faster intersection
     # and explode it (to be sure there is no multi-parts)
     geometry = split_polygon_collection(polygon_collection, fast_intersection_surface, get_explode=True)
     mask_geometry = split_polygon_collection(mask_collection, fast_intersection_surface, get_explode=True)
@@ -605,8 +598,9 @@ def mask(polygon_collection, mask_collection, fast_intersection_surface):
             else:
                 result.append(geom)
 
-    # Join coincident polygons
-    result = join(result)
+    # Multi to single + dissolve coincident polygons
+    result = explode(result)
+    result = [no_artifact_unary_union(poly) for poly in dissolve(result)]
 
     return result
 
@@ -618,10 +612,46 @@ def merge(line_collection):
     :return:
     """
     # Merge MultiLinestring objects returned by the "join" function
-    merged_line = [linemerge(line) if isinstance(line, MultiLineString) else line for line in join(line_collection)]
+    merged_line = [linemerge(line) if isinstance(line, MultiLineString) else line for line in dissolve(line_collection)]
 
     # Keep only single parts
     return explode(merged_line)
+
+
+def mesh(startx, starty, endx, endy, side=None, area=None):
+    """ Compute a mesh grid
+
+    :param startx:
+    :param starty:
+    :param endx:
+    :param endy:
+    :param side:
+    :param area:
+    :return:
+    """
+    if not side:
+        side = msqrt(area)
+
+    startx = startx - side/2
+    starty = starty - side/2
+    endx = endx + side/2
+    endy = endy + side/2
+    origx = startx
+
+    polygons = []
+    while starty < endy:
+        startx = origx
+        while startx < endx:
+            poly = [
+                (startx, starty),
+                (startx, starty + side),
+                (startx + side, starty + side),
+                (startx + side, starty)]
+            polygons.append(Polygon(poly))
+            startx += side
+        starty += side
+
+    return polygons
 
 
 def no_artifact_unary_union(geoms, eps=0.00001):
@@ -667,64 +697,23 @@ def overlaps(geometry, geometry_collection, r_tree=None):
         geometry) for i, geom in enumerate(geometry_collection)]
 
 
-def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split=hexana,
-                           **metis_options):
-    """ Partition polygon into a subset of polygons of equal area
+def polygon_to_mesh(polygon, threshold, method):
+    """
 
-    :param polygon: polygon intended to be partitioned
-    :param unit_area: area of a sub-polygon
-    :param disaggregation_factor: factor use to discretize polygons before aggregation
-    :param recursive: k-way or recursive method for partitioning
-    :param precision: metric precision for sub-polygon area
-    :param split: function used to split polygon into smaller unit blocks
-    :param metis_options: specific METIS options (see METIS manual)
+    :param polygon:
+    :param threshold:
+    :param method: {'hexana', 'fishnet'}
     :return:
     """
-    nparts = int(polygon.area/unit_area)
+    grid = method(*polygon.bounds, area=threshold)
+    split = []
+    for unit in grid:
+        if unit.within(polygon):
+            split.append(unit)
+        elif unit.overlaps(polygon):
+            split.append(unit.intersection(polygon))
 
-    if nparts <= 1 and (polygon.area - unit_area) < unit_area/disaggregation_factor:
-        return [polygon]
-
-    # Split polygon into sub-elements
-    split_polygon = split(polygon, unit_area / disaggregation_factor)
-    # split_polygon = [poly for poly in split_polygon if int(poly.area / precision) != 0]
-
-    division = [unit_area/polygon.area] * nparts
-    if polygon.area % unit_area != 0:  # and (polygon.area - nparts * unit_area) >= unit_area/disaggregation_factor:
-        division += [(polygon.area - nparts * unit_area)/polygon.area]
-        nparts += 1
-
-    area = [int(poly.area / precision) for poly in split_polygon]
-
-    return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
-
-
-def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split, recursive, **metis_options):
-    """ Aggregate polygons into partitions
-
-    :param polygons: polygons to aggregate
-    :param weights: polygons' corresponding weight
-    :param nparts: number of partitions
-    :param division: list of final relative weights of each partition
-    :param weight_attr:
-    :param split:
-    :param recursive:
-    :param metis_options:
-    :return:
-    """
-    if "contig" in metis_options.keys():
-        is_contiguous = metis_options["contig"]
-    else:
-        is_contiguous = False
-    graph = polygon_collection_to_graph(polygons, weights, split, is_contiguous, weight_attr)
-    tpweights = [(d,) for d in division]
-    partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
-
-    partition_collection = []
-    for part in partition:
-        partition_collection.append(no_artifact_unary_union([polygons[n] for n in part]))
-
-    return partition_collection
+    return explode(split)
 
 
 def polygon_collection_to_graph(polygon_collection, weights, split, is_contiguous, weight_attr="weight"):
