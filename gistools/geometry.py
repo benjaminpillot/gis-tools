@@ -58,12 +58,6 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split
     # Return unions of polygons belonging to each part
     return [no_artifact_unary_union([polygons[n] for n in part]) for part in partition]
 
-    # partition_collection = []
-    # for part in partition:
-    #     partition_collection.append(no_artifact_unary_union([polygons[n] for n in part]))
-
-    # return partition_collection
-
 
 def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split, **metis_options):
     """ Partition polygon into a subset of polygons of equal area
@@ -83,16 +77,17 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
         return [polygon]
 
     # Split polygon into sub-elements
-    split_polygon = split(polygon, unit_area / disaggregation_factor)
+    split_poly = split_polygon(polygon, split, unit_area/disaggregation_factor, get_explode=True)
+    # split_poly = split(polygon, unit_area / disaggregation_factor)
 
     division = [unit_area/polygon.area] * nparts
     if polygon.area % unit_area != 0:  # and (polygon.area - nparts * unit_area) >= unit_area/disaggregation_factor:
         division += [(polygon.area - nparts * unit_area)/polygon.area]
         nparts += 1
 
-    area = [int(poly.area / precision) for poly in split_polygon]
+    area = [int(poly.area / precision) for poly in split_poly]
 
-    return aggregate_partitions(split_polygon, area, nparts, division, "area", split, recursive, **metis_options)
+    return aggregate_partitions(split_poly, area, nparts, division, "area", split, recursive, **metis_options)
 
 
 def centroid(point_collection):
@@ -258,10 +253,6 @@ def dissolve(geometry_collection):
 
             if increment not in geom_idx:
                 geom = geometry_collection[increment]
-                # list_of_intersecting_features = list(idx.intersection(geom.bounds))
-                # list_of_truly_intersecting_features = [n for n in list_of_intersecting_features if
-                #                                        geom.intersects(geometry_collection[n])]
-                # union = [geometry_collection[n] for n in list_of_truly_intersecting_features]
                 union_idx, union = intersecting_features(geom, geometry_collection, idx)
 
                 if len(union) > 0:
@@ -880,6 +871,23 @@ def split_line_collection(line_collection, threshold, method="cut", get_explode=
     split_method = {'cut': cut}
 
     return split_collection(line_collection, threshold, split_method[method], get_explode)
+
+
+def split_polygon(polygon, method, threshold, get_explode):
+    """ Split polygon with respect to method
+
+    Split polygon and return exploded (no multi part) if necessary
+    :param polygon:
+    :param method:
+    :param threshold:
+    :param get_explode: (boolean) return exploded collection
+    :return:
+    """
+    sp_poly = method(polygon, threshold)
+    if get_explode:
+        return explode(sp_poly)
+    else:
+        return sp_poly
 
 
 def split_polygon_collection(polygon_collection, threshold, method="katana", get_explode=False):
