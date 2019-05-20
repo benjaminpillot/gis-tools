@@ -78,7 +78,6 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
 
     # Split polygon into sub-elements
     split_poly = split_polygon(polygon, split, unit_area/disaggregation_factor, get_explode=True)
-    # split_poly = split(polygon, unit_area / disaggregation_factor)
 
     division = [unit_area/polygon.area] * nparts
     if polygon.area % unit_area != 0:  # and (polygon.area - nparts * unit_area) >= unit_area/disaggregation_factor:
