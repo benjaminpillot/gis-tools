@@ -16,8 +16,8 @@ __email__ = 'benjaminpillot@riseup.net'
 
 test = PolygonLayer("enp_pn_s_973.shp")
 test = test[[0]].to_crs(32622)
-test = test.split_into_equal_areas(50000000, disaggregation_factor=20, precision=100, split_method="hexana",
-                                   contig=True, ncuts=2)
+test = test.partition(50000000, disaggregation_factor=20, precision=100, split_method="hexana",
+                      contig=True, ncuts=2)
 test["attr"] = np.random.randint(1000, size=(len(test),))
 
 # Plot the resulting sub-polygons
