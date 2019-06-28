@@ -1,12 +1,12 @@
 from setuptools import setup, find_packages
 
-import versioneer
+import gistools
 
 with open("README.md", 'r') as fh:
     long_description = fh.read()
 
 setup(name='gis_tools',
-      version=versioneer.get_version(),
+      version=gistools.__version__,
       description='Some geographical tools for Python developers',
       long_description=long_description,
       long_description_content_type="text/markdown",
