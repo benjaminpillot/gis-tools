@@ -89,14 +89,14 @@ class ZonalStatistics:
 
         :return: list of mean values for each geometry zone
         """
-        return self._get_statistic(method=np.nanmean, weight_method=np.average)
+        return self._get_statistic(method=np.mean, weight_method=np.average)
 
     def std(self):
         """ Compute zonal standard deviation
 
         :return: list of std values for each geometry zone
         """
-        return self._get_statistic(method=np.nanstd, weight_method=weight_std)
+        return self._get_statistic(method=np.std, weight_method=weight_std)
 
     ###################
     # Protected methods
@@ -107,7 +107,7 @@ class ZonalStatistics:
                 return [weight_method(cell[~np.isnan(cell)], weights=surf[~np.isnan(cell)], **kwargs) for cell, surf in
                         self._get_raster_cell_values_with_surface(raster)]
             else:
-                return [method(cell, **kwargs) for cell in self._get_raster_cell_values(raster)]
+                return [method(cell[~np.isnan(cell)], **kwargs) for cell in self._get_raster_cell_values(raster)]
 
         if isinstance(self.raster, list):
             return [statistic(r) for r in self.raster]
