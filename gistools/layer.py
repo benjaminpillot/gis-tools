@@ -1175,6 +1175,25 @@ class PolygonLayer(GeoLayer):
         """
         split_method = check_string(split_method, self._split_methods.keys())
 
+    def sampler(self, density, precision=1):
+        """ Sample points within polygons
+
+        :param density:
+        :param precision: sampling accuracy (default: one point each 1 m²)
+        :return:
+        """
+        points = []
+
+        for poly in self.geometry:
+            nb_of_points = int(density * poly.area/precision)
+            # Use Monte-Carlo principle backwards
+            size = int(nb_of_points * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) / poly.area)
+            rd_pt = [Point(x, y) for x, y in zip(np.random.uniform(poly.bounds[0], poly.bounds[2], size=size),
+                                                 np.random.uniform(poly.bounds[1], poly.bounds[3], size=size))]
+            points.extend([pt for pt in rd_pt if pt.within(poly)])
+
+        return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
+
     def shape_factor(self, convex_hull=True):
         """ Return shape factor series
 
