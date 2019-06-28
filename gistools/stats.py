@@ -60,6 +60,15 @@ class ZonalStatistics:
         # Raster
         self.raster = raster
 
+    def density(self, patch_value):
+        """ Compute density of specified patch value
+
+        Compute density (proportion of some value within zone)
+        :param patch_value:
+        :return:
+        """
+        return self._get_statistic(density, weight_density, value=patch_value)
+
     # TODO: implement other statistical methods (min, max, count, etc.)
     def min(self):
         """ Compute zonal min
@@ -92,13 +101,13 @@ class ZonalStatistics:
     ###################
     # Protected methods
 
-    def _get_statistic(self, method, weight_method):
+    def _get_statistic(self, method, weight_method, **kwargs):
         def statistic(raster):
             if self.is_surface_weighted:
-                return [weight_method(cell[~np.isnan(cell)], surf[~np.isnan(cell)]) for cell, surf in
+                return [weight_method(cell[~np.isnan(cell)], weights=surf[~np.isnan(cell)], **kwargs) for cell, surf in
                         self._get_raster_cell_values_with_surface(raster)]
             else:
-                return [method(cell) for cell in self._get_raster_cell_values(raster)]
+                return [method(cell, **kwargs) for cell in self._get_raster_cell_values(raster)]
 
         if isinstance(self.raster, list):
             return [statistic(r) for r in self.raster]
@@ -131,3 +140,25 @@ def weight_std(values, weights):
     average = np.average(values, weights=weights)
     variance = np.average((values - average)**2, weights=weights)
     return msqrt(variance)
+
+
+def weight_density(values, weights, value=None):
+    """ Return weighted density
+
+    :param values:
+    :param weights:
+    :param value:
+    :return:
+    """
+    return weights[values == value].sum() / weights.sum()
+
+
+def density(values, value):
+    """ Return density of value among values
+
+    :param values:
+    :param value:
+    :return: density (between 0 and 1)
+    """
+
+    return values[values == value].size / values.size
