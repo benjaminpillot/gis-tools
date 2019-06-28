@@ -26,8 +26,10 @@ layer = PolygonLayer("enp_pn_s_973.shp")
 biomass = biomass.to_crs(layer.crs)
 
 # Create ZonalStatistics instance from biomass and layer. 
-zonal_stat = ZonalStatistics(biomass, layer, is_surface_weighted=False, all_touched=True)
+zonal_stat = ZonalStatistics(biomass, layer, is_surface_weighted=True, all_touched=True)
 
 # Compute slope average within each polygon
 avg = zonal_stat.mean()
+std = zonal_stat.std()
+print(std)
 print(avg)
