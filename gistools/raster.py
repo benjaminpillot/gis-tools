@@ -262,7 +262,7 @@ class RasterMap:
             except ValueError:
                 raise RasterMapError("Method should be 'linear' or 'nearest' but is {}".format(method))
 
-            return interpolator((new_geo_grid.latitude_mesh, new_geo_grid.longitude_mesh)), new_geo_grid
+            return interpolator((new_geo_grid.latitude, new_geo_grid.longitude)), new_geo_grid
         else:
             warnings.warn("Invalid factor, factor = 1, or exceeded limit (set no_limit=True). Return copy of object")
             return self.copy()
@@ -416,9 +416,9 @@ class RasterMap:
 
         :return: numpy ndarray
         """
-        surface = compute_surface(self.geo_grid.longitude_mesh - self.geo_grid.res / 2, self.geo_grid.longitude_mesh +
-                                  self.geo_grid.res / 2, self.geo_grid.latitude_mesh + self.geo_grid.res / 2,
-                                  self.geo_grid.latitude_mesh - self.geo_grid.res / 2, self.geo_type,
+        surface = compute_surface(self.geo_grid.longitude - self.geo_grid.res / 2, self.geo_grid.longitude +
+                                  self.geo_grid.res / 2, self.geo_grid.latitude + self.geo_grid.res / 2,
+                                  self.geo_grid.latitude - self.geo_grid.res / 2, self.geo_type,
                                   ellipsoid_from(self.crs))
 
         return surface
