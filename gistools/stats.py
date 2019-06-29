@@ -89,7 +89,7 @@ class ZonalStatistics:
 
         :return: list of mean values for each geometry zone
         """
-        return self._get_statistic(method=np.mean, weight_method=np.average)
+        return self._get_statistic(method=np.mean, weight_method=weight_average)
 
     def std(self):
         """ Compute zonal standard deviation
@@ -128,6 +128,19 @@ class ZonalStatistics:
             n += 1
 
 
+def weight_average(values, weights):
+    """
+
+    :param values:
+    :param weights:
+    :return:
+    """
+    try:
+        return np.average(values, weights=weights)
+    except ZeroDivisionError:
+        return None
+
+
 def weight_std(values, weights):
     """ Return weighted standard deviation
 
@@ -136,8 +149,10 @@ def weight_std(values, weights):
     :param weights:
     :return:
     """
-
-    average = np.average(values, weights=weights)
+    try:
+        average = np.average(values, weights=weights)
+    except ZeroDivisionError:
+        return None
     variance = np.average((values - average)**2, weights=weights)
     return msqrt(variance)
 
