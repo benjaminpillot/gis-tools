@@ -6,7 +6,7 @@ More detailed description.
 """
 
 # __all__ = []
-__version__ = '0.15.77'
+__version__ = '0.15.78'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
