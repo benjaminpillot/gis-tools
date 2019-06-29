@@ -1429,14 +1429,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
-if __name__ == "__main__":
-    polygons = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar GHI/"
-                            "pv_polygons_permissive.geojson")
-    print(len(polygons))
-    with Timer() as t:
-        test = polygons.sampler(0.01)
-    # test.to_file("/home/benjamin/Documents/qgis/sample_points.shp")
-    print("spent time: %s" % t)
-    print(len(test))
