@@ -19,12 +19,14 @@ import geopandas as gpd
 import numpy as np
 import copy
 
+from numba import jit
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
 from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from pandas import concat
 from shapely.ops import cascaded_union
+from utils.sys.timer import Timer
 from utils.toolset import split_list_by_index
 from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
 from utils.check.value import check_sub_collection_in_collection
@@ -1175,22 +1177,33 @@ class PolygonLayer(GeoLayer):
         """
         split_method = check_string(split_method, self._split_methods.keys())
 
-    def sampler(self, density, precision=1):
-        """ Sample points within polygons
+    def sampler(self, density=None, count=None, precision=1):
+        """ Sample random points within polygons
 
         :param density:
+        :param count:
         :param precision: sampling accuracy (default: one point each 1 m²)
         :return:
         """
+        @jit(nopython=True)
+        def generate_rd_pt(xmin, xmax, ymin, ymax, size):
+            return [(x, y) for x, y in zip(np.random.uniform(xmin, xmax, size=size),
+                                           np.random.uniform(ymin, ymax, size=size))]
+
+        if density is None and count is None:
+            raise PolygonLayerError("Either density or count must be set")
+
         points = []
 
         for poly in self.geometry:
-            nb_of_points = int(density * poly.area/precision)
-            # Use Monte-Carlo principle backwards
-            size = int(nb_of_points * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) / poly.area)
-            rd_pt = [Point(x, y) for x, y in zip(np.random.uniform(poly.bounds[0], poly.bounds[2], size=size),
-                                                 np.random.uniform(poly.bounds[1], poly.bounds[3], size=size))]
-            points.extend([pt for pt in rd_pt if pt.within(poly)])
+            if density is not None:
+                # Use Monte-Carlo principle backwards
+                count = int(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
+                            (poly.bounds[3] - poly.bounds[1]) / poly.area)
+
+            multi_rd_pt = MultiPoint(generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1], poly.bounds[3],
+                                                    count))
+            points.extend(multi_rd_pt.intersection(poly))
 
         return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
 
@@ -1416,3 +1429,14 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
+
+
+if __name__ == "__main__":
+    polygons = PolygonLayer("/home/benjamin/ownCloud/Post-doc Guyane/GREECE model/Results/Solar GHI/"
+                            "pv_polygons_permissive.geojson")
+    print(len(polygons))
+    with Timer() as t:
+        test = polygons.sampler(0.01)
+    # test.to_file("/home/benjamin/Documents/qgis/sample_points.shp")
+    print("spent time: %s" % t)
+    print(len(test))
