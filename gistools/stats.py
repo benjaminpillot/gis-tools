@@ -63,7 +63,8 @@ class ZonalStatistics:
     def density(self, patch_value):
         """ Compute density of specified patch value
 
-        Compute density (proportion of some value within zone)
+        Compute density (proportion of some value within zone).
+        Better to be used with some raster classification
         :param patch_value:
         :return:
         """
