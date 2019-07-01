@@ -26,7 +26,6 @@ from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from pandas import concat
 from shapely.ops import cascaded_union
-from utils.sys.timer import Timer
 from utils.toolset import split_list_by_index
 from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
 from utils.check.value import check_sub_collection_in_collection
@@ -274,14 +273,15 @@ class GeoLayer:
         :param resolution:
         :return: PolygonLayer instance
         """
-        return self._polygon_layer_class.from_gpd(geometry=self._gpd_df.buffer(distance, resolution), crs=self.crs)
+        return self._polygon_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.buffer(distance, resolution),
+                                                  crs=self.crs)
 
     def centroid(self):
         """ Get centroid of geometries
 
         :return: PointLayer instance
         """
-        return self._point_layer_class.from_gpd(geometry=self._gpd_df.centroid, crs=self.crs)
+        return self._point_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.centroid, crs=self.crs)
 
     @return_new_instance
     def dissolve(self, by=None, aggfunc='first', as_index=False):
@@ -380,9 +380,9 @@ class GeoLayer:
         :return:
         """
         try:
-            return self._polygon_layer_class.from_gpd(geometry=self._gpd_df.envelope, crs=self.crs)
+            return self._polygon_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.envelope, crs=self.crs)
         except GeoLayerError:
-            return self._point_layer_class.from_gpd(geometry=self._gpd_df.envelope, crs=self.crs)
+            return self._point_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.envelope, crs=self.crs)
 
     def explode(self):
         """ Explode "multi" geometry into "single"
@@ -1190,9 +1190,9 @@ class PolygonLayer(GeoLayer):
         :return:
         """
         @jit(nopython=True)
-        def generate_rd_pt(xmin, xmax, ymin, ymax, size):
-            return [(x, y) for x, y in zip(np.random.uniform(xmin, xmax, size=size),
-                                           np.random.uniform(ymin, ymax, size=size))]
+        def generate_rd_pt(xmin, xmax, ymin, ymax, nb_pts):
+            return [(x, y) for x, y in zip(np.random.uniform(xmin, xmax, size=nb_pts),
+                                           np.random.uniform(ymin, ymax, size=nb_pts))]
 
         if density is None and count is None:
             raise PolygonLayerError("Either density or count must be set")
@@ -1202,14 +1202,16 @@ class PolygonLayer(GeoLayer):
         for poly in self.geometry:
             if density is not None:
                 # Use Monte-Carlo principle backwards
-                count = int(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
-                            (poly.bounds[3] - poly.bounds[1]) / poly.area)
+                size = round(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
+                             (poly.bounds[3] - poly.bounds[1]) / poly.area)
+            else:
+                size = round(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) / poly.area)
 
             multi_rd_pt = MultiPoint(generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1], poly.bounds[3],
-                                                    count))
-            points.extend(multi_rd_pt.intersection(poly))
+                                                    size))
+            points.append(multi_rd_pt.intersection(poly))
 
-        return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
+        return self._point_layer_class.from_gpd(geometry=explode(points), crs=self.crs)
 
     def shape_factor(self, convex_hull=True):
         """ Return shape factor series
