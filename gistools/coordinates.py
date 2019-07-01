@@ -15,7 +15,6 @@ import warnings
 import geopandas as gpd
 from cpc.geogrids import Geogrid
 from osgeo import gdal
-from pyproj import Proj
 from rtree import index
 
 from gistools.projections import proj4_from_raster
@@ -227,7 +226,7 @@ class GeoGrid(Geogrid):
 
         try:
             # If resolution in km/m, type = 'equal'
-            if not Proj(geopandas_series.crs).is_latlong():
+            if not pyproj.Proj(geopandas_series.crs).crs.is_geographic:
                 geo_type = 'equal'
         except AttributeError:
             raise ValueError("Input GeoSeries does not seem to be valid")
@@ -272,7 +271,7 @@ class GeoGrid(Geogrid):
                      geo_transform[1] - geo_transform[1] / 2)
 
         # Geo type
-        if pyproj.Proj(proj4_from_raster(raster_file)).is_latlong():
+        if pyproj.Proj(proj4_from_raster(raster_file)).crs.is_geographic:
             geo_type = "latlon"
         else:
             geo_type = "equal"
