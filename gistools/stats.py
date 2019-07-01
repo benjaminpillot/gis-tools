@@ -129,8 +129,9 @@ class ZonalStatistics:
 
 
 def weight_average(values, weights):
-    """
+    """ Return weighted average
 
+    Return weighted average, and None if sum(w) = 0
     :param values:
     :param weights:
     :return:
