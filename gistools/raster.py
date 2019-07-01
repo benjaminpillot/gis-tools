@@ -337,7 +337,7 @@ class RasterMap:
         return self._raster_array[r, c]
 
     def is_latlong(self):
-        return pyproj.Proj(proj4_from(self.crs)).is_latlong()
+        return pyproj.Proj(proj4_from(self.crs)).crs.is_geographic
 
     def is_no_data(self):
         return np.isnan(self.raster_array)
