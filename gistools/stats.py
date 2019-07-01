@@ -99,6 +99,13 @@ class ZonalStatistics:
         """
         return self._get_statistic(method=np.std, weight_method=weight_std)
 
+    def sum(self):
+        """ Compute zonal sum
+
+        :return: list of sum values for each geometry zone
+        """
+        return self._get_statistic(method=np.sum)
+
     ###################
     # Protected methods
 
