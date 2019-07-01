@@ -274,20 +274,14 @@ class GeoLayer:
         :param resolution:
         :return: PolygonLayer instance
         """
-        outdf = self._gpd_df.copy()
-        outdf.geometry = self._gpd_df.buffer(distance, resolution)
-
-        return self._polygon_layer_class(outdf, name=self.name)
+        return self._polygon_layer_class.from_gpd(geometry=self._gpd_df.buffer(distance, resolution), crs=self.crs)
 
     def centroid(self):
         """ Get centroid of geometries
 
         :return: PointLayer instance
         """
-        outdf = self._gpd_df.copy()
-        outdf.geometry = self._gpd_df.centroid
-
-        return self._point_layer_class(outdf, name=self.name)
+        return self._point_layer_class.from_gpd(geometry=self._gpd_df.centroid, crs=self.crs)
 
     @return_new_instance
     def dissolve(self, by=None, aggfunc='first', as_index=False):
@@ -379,6 +373,16 @@ class GeoLayer:
         outdf["geometry"] = outdf["geometry"].apply(lambda geom: wkb.loads(geom))
 
         return outdf
+
+    def envelope(self):
+        """ Extract rectangular polygon that contains each geometry
+
+        :return:
+        """
+        try:
+            return self._polygon_layer_class.from_gpd(geometry=self._gpd_df.envelope, crs=self.crs)
+        except GeoLayerError:
+            return self._point_layer_class.from_gpd(geometry=self._gpd_df.envelope, crs=self.crs)
 
     def explode(self):
         """ Explode "multi" geometry into "single"
