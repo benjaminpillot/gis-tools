@@ -75,14 +75,14 @@ class ZonalStatistics:
 
         :return:
         """
-        pass
+        return self._get_statistic(method=np.min)
 
     def max(self):
         """ Compute zonal max
 
         :return:
         """
-        pass
+        return self._get_statistic(method=np.max)
 
     def mean(self):
         """ Compute zonal mean
@@ -101,9 +101,9 @@ class ZonalStatistics:
     ###################
     # Protected methods
 
-    def _get_statistic(self, method, weight_method, **kwargs):
+    def _get_statistic(self, method, weight_method=None, **kwargs):
         def statistic(raster):
-            if self.is_surface_weighted:
+            if self.is_surface_weighted and weight_method is not None:
                 return [weight_method(cell[~np.isnan(cell)], weights=surf[~np.isnan(cell)], **kwargs) for cell, surf in
                         self._get_raster_cell_values_with_surface(raster)]
             else:
