@@ -1183,12 +1183,13 @@ class PolygonLayer(GeoLayer):
         """
         split_method = check_string(split_method, self._split_methods.keys())
 
-    def sampler(self, density=None, count=None, precision=1):
+    def sampler(self, density=None, count=None, precision=1, surface_threshold=50000000):
         """ Sample random points within polygons
 
-        :param density:
-        :param count:
+        :param density: density of the random points with respect to polygon area
+        :param count: number of random points to generate
         :param precision: sampling accuracy (default: one point each 1 m²)
+        :param surface_threshold: threshold above which intersection predicate is used
         :return:
         """
         @jit(nopython=True)
@@ -1204,24 +1205,25 @@ class PolygonLayer(GeoLayer):
         points = []
 
         for poly in self.geometry:
-            if density is not None:
+            if density:
                 # Use Monte-Carlo principle backwards
                 size = math.ceil(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
                                  (poly.bounds[3] - poly.bounds[1]) / poly.area)
             else:
                 size = math.ceil(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) /
                                  poly.area)
-            rd_pts = [Point(coords) for coords in generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1],
-                                                                 poly.bounds[3], size)]
 
-            prep_poly = prep(poly)
-            i = -1
-            c = 0
-            while c < count and i < size - 1:
-                i += 1
-                if prep_poly.contains(rd_pts[i]):
-                    points.append(rd_pts[i])
-                    c += 1
+            if poly.area >= surface_threshold:
+                rd_pts = [Point(coords) for coords in generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1],
+                                                                     poly.bounds[3], size)]
+                prep_poly = prep(poly)
+                for i in range(len(rd_pts)):
+                    if prep_poly.contains(rd_pts[i]):
+                        points.append(rd_pts[i])
+            else:
+                rd_pts = MultiPoint(generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1], poly.bounds[3],
+                                                   size))
+                points.extend(rd_pts.intersection(poly))
 
         return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
 
