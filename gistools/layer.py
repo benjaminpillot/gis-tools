@@ -7,6 +7,7 @@ road/electrical networks, waterways, restricted areas, etc.)
 """
 import math
 import os
+import random
 
 import fiona
 import warnings
@@ -26,6 +27,7 @@ from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from pandas import concat
 from shapely.ops import cascaded_union
+from shapely.prepared import prep
 from utils.toolset import split_list_by_index
 from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
 from utils.check.value import check_sub_collection_in_collection
@@ -1191,8 +1193,10 @@ class PolygonLayer(GeoLayer):
         """
         @jit(nopython=True)
         def generate_rd_pt(xmin, xmax, ymin, ymax, nb_pts):
-            return [(x, y) for x, y in zip(np.random.uniform(xmin, xmax, size=nb_pts),
-                                           np.random.uniform(ymin, ymax, size=nb_pts))]
+            pts = []
+            for n in range(nb_pts):
+                pts.append((xmin + random.random() * (xmax - xmin), ymin + random.random() * (ymax - ymin)))
+            return pts
 
         if density is None and count is None:
             raise PolygonLayerError("Either density or count must be set")
@@ -1202,16 +1206,24 @@ class PolygonLayer(GeoLayer):
         for poly in self.geometry:
             if density is not None:
                 # Use Monte-Carlo principle backwards
-                size = round(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
-                             (poly.bounds[3] - poly.bounds[1]) / poly.area)
+                size = math.ceil(density * poly.area / precision * (poly.bounds[2] - poly.bounds[0]) *
+                                 (poly.bounds[3] - poly.bounds[1]) / poly.area)
             else:
-                size = round(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) / poly.area)
+                size = math.ceil(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) /
+                                 poly.area)
+            rd_pts = [Point(coords) for coords in generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1],
+                                                                 poly.bounds[3], size)]
 
-            multi_rd_pt = MultiPoint(generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1], poly.bounds[3],
-                                                    size))
-            points.append(multi_rd_pt.intersection(poly))
+            prep_poly = prep(poly)
+            i = -1
+            c = 0
+            while c < count and i < size - 1:
+                i += 1
+                if prep_poly.contains(rd_pts[i]):
+                    points.append(rd_pts[i])
+                    c += 1
 
-        return self._point_layer_class.from_gpd(geometry=explode(points), crs=self.crs)
+        return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
 
     def shape_factor(self, convex_hull=True):
         """ Return shape factor series
