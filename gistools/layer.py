@@ -1215,7 +1215,7 @@ class PolygonLayer(GeoLayer):
                 size = math.ceil(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) /
                                  poly.area)
 
-            # TODO: add distance condition
+            # TODO: add distance condition (another kind of method ?)
             if poly.area >= surface_threshold:
                 rd_pts = [Point(coords) for coords in generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1],
                                                                      poly.bounds[3], size)]
