@@ -6,6 +6,7 @@ More detailed description.
 """
 
 import numpy as np
+from numba import jit
 from numpy import arcsin, cos, sin, pi, sqrt
 
 from gistools.coordinates import Ellipsoid
@@ -52,6 +53,7 @@ def great_circle(latitude_1, latitude_2, delta_longitude, ellipsoid: Ellipsoid):
     return local_sphere_radius() * haversine_formula
 
 
+@jit(nopython=True)
 def euclidean_distance(x1, y1, x2, y2):
     """ Compute euclidean distance in a plane
 
