@@ -275,15 +275,16 @@ class GeoLayer:
         :param resolution:
         :return: PolygonLayer instance
         """
-        return self._polygon_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.buffer(distance, resolution),
-                                                  crs=self.crs)
+        # Warning: use df.copy() otherwise it passes by reference and modifies the original object !
+        return self._polygon_layer_class.from_gpd(self._gpd_df.copy(),
+                                                  geometry=self._gpd_df.buffer(distance, resolution), crs=self.crs)
 
     def centroid(self):
         """ Get centroid of geometries
 
         :return: PointLayer instance
         """
-        return self._point_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.centroid, crs=self.crs)
+        return self._point_layer_class.from_gpd(self._gpd_df.copy(), geometry=self._gpd_df.centroid, crs=self.crs)
 
     @return_new_instance
     def dissolve(self, by=None, aggfunc='first', as_index=False):
@@ -382,9 +383,9 @@ class GeoLayer:
         :return:
         """
         try:
-            return self._polygon_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.envelope, crs=self.crs)
+            return self._polygon_layer_class.from_gpd(self._gpd_df.copy(), geometry=self._gpd_df.envelope, crs=self.crs)
         except GeoLayerError:
-            return self._point_layer_class.from_gpd(self._gpd_df, geometry=self._gpd_df.envelope, crs=self.crs)
+            return self._point_layer_class.from_gpd(self._gpd_df.copy(), geometry=self._gpd_df.envelope, crs=self.crs)
 
     def explode(self):
         """ Explode "multi" geometry into "single"
@@ -1169,6 +1170,7 @@ class PolygonLayer(GeoLayer):
         return self._partition(threshold, disaggregation_factor, precision, recursive, split_method,
                                show_progressbar=show_progressbar, **metis_options)
 
+    # TODO: define partition based on raster statistics
     def rpartition(self, raster, nparts, parameter="sum", disaggregation_factor=16, split_method="hexana",
                    **metis_options):
         """ Partition polygons using corresponding raster statistics
@@ -1213,6 +1215,7 @@ class PolygonLayer(GeoLayer):
                 size = math.ceil(count * (poly.bounds[2] - poly.bounds[0]) * (poly.bounds[3] - poly.bounds[1]) /
                                  poly.area)
 
+            # TODO: add distance condition
             if poly.area >= surface_threshold:
                 rd_pts = [Point(coords) for coords in generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1],
                                                                      poly.bounds[3], size)]
