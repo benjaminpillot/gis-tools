@@ -1223,7 +1223,10 @@ class PolygonLayer(GeoLayer):
             else:
                 rd_pts = MultiPoint(generate_rd_pt(poly.bounds[0], poly.bounds[2], poly.bounds[1], poly.bounds[3],
                                                    size))
-                points.extend(rd_pts.intersection(poly))
+                try:
+                    points.extend(rd_pts.intersection(poly))
+                except TypeError:
+                    points.append(rd_pts.intersection(poly))
 
         return self._point_layer_class.from_gpd(geometry=points, crs=self.crs)
 
