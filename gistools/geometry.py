@@ -55,8 +55,8 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split
     tpweights = [(d,) for d in division]
     partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
 
-    # Return unions of polygons belonging to each part
-    return [no_artifact_unary_union([polygons[n] for n in part]) for part in partition]
+    # Return unions of polygons belonging to each part (no multi-polygons)
+    return explode([no_artifact_unary_union([polygons[n] for n in part]) for part in partition])
 
 
 def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split, **metis_options):
