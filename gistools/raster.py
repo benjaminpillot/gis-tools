@@ -319,8 +319,8 @@ class RasterMap:
             ur_point = (layer.bounds[2], layer.bounds[3])
 
         try:
-            ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(ll_point[1], ll_point[0])
-            ur_point_r, ur_point_c = self._geo_grid.latlon_to_2d_index(ur_point[1], ur_point[0])
+            ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(ll_point[0], ll_point[1])
+            ur_point_r, ur_point_c = self._geo_grid.latlon_to_2d_index(ur_point[0], ur_point[1])
             return self[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1], \
                 self.geo_grid[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1]
         except GeoGridError:
