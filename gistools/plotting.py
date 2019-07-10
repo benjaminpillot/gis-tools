@@ -19,7 +19,7 @@ __copyright__ = 'Copyright 2018, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
 
 
-def plot_geolayer(gl, ax=None, attribute=None, layer_label: str=None, layer_color=None, labels: str=None,
+def plot_geolayer(gl, ax=None, attribute=None, layer_label: str = None, layer_color=None, labels: str = None,
                   marker=None, **kwargs):
     """ Plot geo layer
 
