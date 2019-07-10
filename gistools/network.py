@@ -12,6 +12,7 @@ from abc import abstractmethod
 import networkx as nx
 import numpy as np
 from geopandas import GeoDataFrame
+from numba import jit, float64, boolean
 from shapely.geometry import Point, LineString
 from shapely.ops import linemerge
 from utils.toolset import split_list_by_index
@@ -42,15 +43,15 @@ def multi_edges(graph):
 
     :return: list of edge IDs that connect the same nodes
     """
-    m_edges = []
+    multiple_edges = []
     for node in graph.nodes():
         for neighbor in graph.neighbors(node):
             if graph.number_of_edges(node, neighbor) > 1:
                 edge_id = [i for i in graph[node][neighbor]]
-                if edge_id not in m_edges:
-                    m_edges.append(edge_id)
+                if edge_id not in multiple_edges:
+                    multiple_edges.append(edge_id)
 
-    return m_edges
+    return multiple_edges
 
 
 def remote_edges(graph):
@@ -244,10 +245,8 @@ class Edge(LineLayer):
         and ending coordinates of each road segment
         :return:
         """
-        outdf = self._gpd_df.copy()
-        outdf.geometry = [LineString(from_to) for from_to in self._from_to]
-
-        return outdf
+        return GeoDataFrame(self._gpd_df.copy(), geometry=[LineString(from_to) for from_to in self._from_to],
+                            crs=self.crs)
 
     def get_single_edges(self):
         """ Get single edges
@@ -290,17 +289,13 @@ class Edge(LineLayer):
         :return:
         """
         single_edges = self.get_single_edges()
-        outdf = GeoDataFrame(columns=self.attributes(), crs=self.crs)
         geometry, rows = [], []
 
         for line in single_edges:
             geometry.append(linemerge(self.geometry[line].values))
             rows.append(self._gpd_df.iloc[line[-1]])
 
-        outdf = outdf.append(rows)
-        outdf.geometry = geometry
-
-        return outdf
+        return GeoDataFrame(rows, geometry=geometry, crs=self.crs)
 
     @return_new_instance
     def reconnect(self, tolerance):
@@ -798,7 +793,9 @@ class Network:
 class RoadNetwork(Network):
     """ Road network class
 
-    Road network is basically a multi-directed graph
+    Road network is basically a multi-directed graph with methods
+    for computing fuel consumption and travel time of corresponding
+    vehicles.
     """
 
     roads = protected_property("edges")
@@ -847,7 +844,8 @@ class RoadNetwork(Network):
 
     def fuel_consumption(self, gross_hp, vehicle_weight, vehicle_frontal_area=7.92, engine_efficiency=0.4,
                          fuel_energy_density=35, uphill_hp=0.8, downhill_hp=0.6, drag_resistance=0.35,
-                         mass_correction_factor=1.05, acceleration_rate=1.5 * 0.3048, deceleration_rate=-9.5 * 0.3048):
+                         mass_correction_factor=1.05, acceleration_rate=1.5 * 0.3048,
+                         deceleration_rate=-9.5 * 0.3048, rho_air=1.225):
         """ Compute fuel consumption on road segments
 
         :param vehicle_weight:
@@ -861,6 +859,7 @@ class RoadNetwork(Network):
         :param mass_correction_factor:
         :param acceleration_rate:
         :param deceleration_rate:
+        :param rho_air: air density
         :return:
         """
 
@@ -875,18 +874,15 @@ class RoadNetwork(Network):
         # Maximum speed at intersection
         v_in_max, v_out_max = self._get_velocity_at_intersection()
 
-        # Parameters
-        rho_air = 1.225
-
-        # Compute fuel consumption
+        # Fuel demand
         fuel_demand = {'one-way': [], 'reverse': []}
 
-        for n, row in self.roads.iterrows():
+        for n in range(len(self.roads)):
 
             # Travel time and distance of acceleration
-            t_time_one_way, d_a_one_way = self._get_travel_time_and_distance_of_acceleration(
+            t_time_one_way, d_a_one_way = get_travel_time_and_distance_of_acceleration(
                 v_max_one_way[n], road_length[n], v_in_max[n], v_out_max[n], acceleration_rate, deceleration_rate)
-            t_time_reverse, d_a_reverse = self._get_travel_time_and_distance_of_acceleration(
+            t_time_reverse, d_a_reverse = get_travel_time_and_distance_of_acceleration(
                 v_max_reverse[n], road_length[n], v_out_max[n], v_in_max[n], acceleration_rate, deceleration_rate)
 
             # Travel time (for mean velocity over road segment)
@@ -938,13 +934,13 @@ class RoadNetwork(Network):
         v_in_max, v_out_max = self._get_velocity_at_intersection()
 
         for v, d, v_in, v_out in zip(v_max_one_way, road_length, v_in_max, v_out_max):
-            time, _ = self._get_travel_time_and_distance_of_acceleration(
-                v, d, v_in, v_out, acceleration_rate, deceleration_rate)
+            time, _ = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration_rate,
+                                                                   deceleration_rate)
             travel_time["one-way"].append(TIME_FORMAT[time_format] * time)
 
         for v, d, v_in, v_out in zip(v_max_reverse, road_length, v_in_max, v_out_max):
-            time, _ = self._get_travel_time_and_distance_of_acceleration(
-                v[::-1], d[::-1], v_out, v_in, acceleration_rate, deceleration_rate)
+            time, _ = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in, acceleration_rate,
+                                                                   deceleration_rate)
             travel_time["reverse"].append(TIME_FORMAT[time_format] * time)
 
         return travel_time
@@ -986,7 +982,7 @@ class RoadNetwork(Network):
         v_slope_one_way = []
         v_slope_reverse = []
         v_radius = []
-        for n, row in self.roads.iterrows():
+        for n in range(len(self.roads)):
             v_one_way = np.zeros(len(slope[n]))
             v_reverse = np.zeros(len(slope[n]))
             grade_resistance = 9.81 * vehicle_weight * np.sin(np.fabs(slope[n]) * np.pi / 180)
@@ -1012,83 +1008,136 @@ class RoadNetwork(Network):
 
         return v_max_one_way, v_max_reverse
 
-    @staticmethod
-    def _get_travel_time_and_distance_of_acceleration(v_max, road_segment_length, v_in_max, v_out_max, a_1, a_2):
-        """ Get travel time on road segment
 
-        :param v_max: maximum limited speed on road segment
-        :param road_segment_length: length of road segment
-        :param v_in_max:
-        :param v_out_max:
-        :param a_1: acceleration rate
-        :param a_2: deceleration rate
-        :return:
-        """
+@jit((float64[:], float64[:], float64, float64, float64, float64), cache=True, nopython=True)
+def get_travel_time_and_distance_of_acceleration(v_max, road_segment_length, v_in_max, v_out_max, a_1, a_2):
+    """ Get travel time on road segment
 
-        v = np.concatenate([[v_in_max], v_max[1:], [v_out_max]])
-        t_time = np.zeros(len(v_max))
-        d_a = np.zeros(len(v_max))  # Distance of acceleration
+    :param v_max: maximum limited speed on road segment
+    :param road_segment_length: length of road segment
+    :param v_in_max:
+    :param v_out_max:
+    :param a_1: acceleration rate
+    :param a_2: deceleration rate
+    :return:
+    """
 
-        tol = 0.01  # Tolerance for comparing d <= s --> d must be <= s + tolerance (In order to avoid too much
-        # backward in the while loop, as well as floating errors where d is not exactly equal to s at 1e-10)
-        n = 0
-        while n <= len(v_max) - 1:
-            v_in = v[n]
-            v_fn = v[n + 1]
-            s = road_segment_length[n]
-            v_m = v_max[n]
+    v = np.concatenate((np.array([v_in_max]), v_max[1:], np.array([v_out_max])))
+    t_time = np.zeros(len(v_max))
+    d_a = np.zeros(len(v_max))  # Distance of acceleration
 
-            d_1 = (v_m ** 2 - v_in ** 2) / (2 * a_1)
-            d_2 = (v_fn ** 2 - v_m ** 2) / (2 * a_2)
-            if v_m > v_in and v_m > v_fn:
-                if v_fn >= v_in:
-                    d = (v_fn ** 2 - v_in ** 2) / (2 * a_1)
-                else:
-                    d = (v_fn ** 2 - v_in ** 2) / (2 * a_2)
-                if d_1 + d_2 <= s:
-                    t_time[n] = (v_m - v_in) / a_1 + (v_fn - v_m) / a_2 + (s - (d_1 + d_2)) / v_m
-                    d_a[n] = d_1
+    tol = 0.01  # Tolerance for comparing d <= s --> d must be <= s + tolerance (In order to avoid too much
+    # backward in the while loop, as well as floating errors where d is not exactly equal to s at 1e-10)
+    n = 0
+    while n <= len(v_max) - 1:
+        v_in = v[n]
+        v_fn = v[n + 1]
+        s = road_segment_length[n]
+        v_m = v_max[n]
+
+        d_1 = (v_m ** 2 - v_in ** 2) / (2 * a_1)
+        d_2 = (v_fn ** 2 - v_m ** 2) / (2 * a_2)
+        if v_m > v_in and v_m > v_fn:
+            if v_fn >= v_in:
+                d = (v_fn ** 2 - v_in ** 2) / (2 * a_1)
+            else:
+                d = (v_fn ** 2 - v_in ** 2) / (2 * a_2)
+            if d_1 + d_2 <= s:
+                t_time[n] = (v_m - v_in) / a_1 + (v_fn - v_m) / a_2 + (s - (d_1 + d_2)) / v_m
+                d_a[n] = d_1
+                v[n + 1] = v_fn
+                n += 1
+            else:
+                if d <= s + tol:
+                    v_min = ((2 * s * a_1 * a_2 + a_2 * v_in ** 2 - a_1 * v_fn ** 2) / (a_2 - a_1)) ** 0.5
+                    t_time[n] = (v_min - v_in) / a_1 + (v_fn - v_min) / a_2
+                    d_a[n] = (v_min ** 2 - v_in ** 2) / (2 * a_1)
                     v[n + 1] = v_fn
                     n += 1
                 else:
-                    if d <= s + tol:
-                        v_min = ((2 * s * a_1 * a_2 + a_2 * v_in ** 2 - a_1 * v_fn ** 2) / (a_2 - a_1)) ** 0.5
-                        t_time[n] = (v_min - v_in) / a_1 + (v_fn - v_min) / a_2
-                        d_a[n] = (v_min ** 2 - v_in ** 2) / (2 * a_1)
-                        v[n + 1] = v_fn
+                    if v_fn >= v_in:
+                        v_front = (v_in ** 2 + 2 * a_1 * s) ** 0.5
+                        t_time[n] = (v_front - v_in) / a_1
+                        d_a[n] = s
+                        v[n + 1] = v_front
                         n += 1
                     else:
-                        if v_fn >= v_in:
-                            v_front = (v_in ** 2 + 2 * a_1 * s) ** 0.5
-                            t_time[n] = (v_front - v_in) / a_1
-                            d_a[n] = s
-                            v[n + 1] = v_front
-                            n += 1
-                        else:
-                            v[n] = (v_fn ** 2 - 2 * a_2 * s) ** 0.5
-                            n -= 1 if n > 0 else 0
-            elif v_fn < v_m <= v_in:
-                if d_2 <= s + tol:
-                    t_time[n] = (v_fn - v_m) / a_2 + (s - d_2) / v_m
-                    v[n + 1] = v_fn
-                    n += 1
-                else:
-                    v[n] = (v_fn ** 2 - 2 * a_2 * s) ** 0.5
-                    n -= 1 if n > 0 else 0
-            elif v_in < v_m <= v_fn:
-                if d_1 <= s:
-                    t_time[n] = (v_m - v_in) / a_1 + (s - d_1) / v_m
-                    d_a[n] = d_1
-                    v[n + 1] = v_m
-                else:
-                    v_front = (v_in ** 2 + 2 * a_1 * s) ** 0.5
-                    t_time[n] = (v_front - v_in) / a_1
-                    d_a[n] = s
-                    v[n + 1] = v_front
+                        v[n] = (v_fn ** 2 - 2 * a_2 * s) ** 0.5
+                        n -= 1 if n > 0 else 0
+        elif v_fn < v_m <= v_in:
+            if d_2 <= s + tol:
+                t_time[n] = (v_fn - v_m) / a_2 + (s - d_2) / v_m
+                v[n + 1] = v_fn
                 n += 1
-            elif v_m <= v_in and v_m <= v_fn:
-                t_time[n] = s / v_m
+            else:
+                v[n] = (v_fn ** 2 - 2 * a_2 * s) ** 0.5
+                n -= 1 if n > 0 else 0
+        elif v_in < v_m <= v_fn:
+            if d_1 <= s:
+                t_time[n] = (v_m - v_in) / a_1 + (s - d_1) / v_m
+                d_a[n] = d_1
                 v[n + 1] = v_m
-                n += 1
+            else:
+                v_front = (v_in ** 2 + 2 * a_1 * s) ** 0.5
+                t_time[n] = (v_front - v_in) / a_1
+                d_a[n] = s
+                v[n + 1] = v_front
+            n += 1
+        elif v_m <= v_in and v_m <= v_fn:
+            t_time[n] = s / v_m
+            v[n + 1] = v_m
+            n += 1
 
-        return t_time, d_a
+    return t_time, d_a
+
+
+# @jit(cache=True, nopython=True)
+# def get_travel_time(v_max, road_length, v_in_max, v_out_max, acceleration, deceleration, time_format, one_way):
+#
+#     travel_time = []
+#
+#     for v, d, v_in, v_out in zip(v_max, road_length, v_in_max, v_out_max):
+#         if one_way:
+#             time, _ = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration, deceleration)
+#         else:
+#             time, _ = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in, acceleration,
+#                                                                    deceleration)
+#         travel_time.append(time_format * time)
+#
+#     return travel_time
+#
+#
+# @jit(cache=True, nopython=True)
+# def get_fuel_consumption(nb_roads, v_max_one_way, v_max_reverse, road_length, v_in_max, v_out_max, acceleration,
+#                          deceleration, rolling_coefficient, vehicle_weight, slope, rho_air, vehicle_frontal_area,
+#                          drag_resistance, mass_correction_factor, fuel_energy_density, engine_efficiency):
+#
+#     fuel_demand_one_way = []
+#     fuel_demand_reverse = []
+#
+#     for n in range(nb_roads):
+#         # Travel time and distance of acceleration
+#         t_time_one_way, d_a_one_way = get_travel_time_and_distance_of_acceleration(
+#             v_max_one_way[n], road_length[n], v_in_max[n], v_out_max[n], acceleration, deceleration)
+#         t_time_reverse, d_a_reverse = get_travel_time_and_distance_of_acceleration(
+#             v_max_reverse[n], road_length[n], v_out_max[n], v_in_max[n], acceleration, deceleration)
+#
+#         # Travel time (for mean velocity over road segment)
+#         v_mean_one_way = road_length[n] / t_time_one_way
+#         v_mean_reverse = road_length[n] / t_time_reverse
+#
+#         # Energy demand
+#         u_r = rolling_coefficient[n] * vehicle_weight * 9.81 * np.cos(slope[n] * np.pi / 180) * road_length[n]
+#         u_a_one_way = 0.5 * rho_air * vehicle_frontal_area * drag_resistance * v_mean_one_way ** 2 * road_length[n]
+#         u_a_reverse = 0.5 * rho_air * vehicle_frontal_area * drag_resistance * v_mean_reverse ** 2 * road_length[n]
+#         u_i_one_way = mass_correction_factor * vehicle_weight * acceleration * d_a_one_way
+#         u_i_reverse = mass_correction_factor * vehicle_weight * acceleration * d_a_reverse
+#         u_g_one_way = vehicle_weight * 9.81 * np.sin(slope[n] * np.pi / 180) * road_length[n]
+#         u_g_reverse = vehicle_weight * 9.81 * np.sin(-slope[n] * np.pi / 180) * road_length[n]
+#
+#         fuel_demand_one_way.append(np.maximum(0, (u_r + u_a_one_way + u_i_one_way + u_g_one_way) * 1e-6 / (
+#                 fuel_energy_density * engine_efficiency)))
+#         fuel_demand_reverse.append(np.maximum(0, (u_r + u_a_reverse + u_i_reverse + u_g_reverse) * 1e-6 / (
+#                 fuel_energy_density * engine_efficiency)))
+#
+#     return fuel_demand_one_way, fuel_demand_reverse
