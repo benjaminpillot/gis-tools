@@ -321,7 +321,7 @@ class RasterMap:
         try:
             ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(ll_point[0], ll_point[1])
             ur_point_r, ur_point_c = self._geo_grid.latlon_to_2d_index(ur_point[0], ur_point[1])
-            return self[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1], \
+            return self.raster_array[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1], \
                 self.geo_grid[ur_point_r:ll_point_r + 1, ll_point_c:ur_point_c + 1]
         except GeoGridError:
             raise RasterMapError("Lower left or/and upper right points have not been rightly defined")
@@ -520,17 +520,28 @@ class RasterMap:
             return cls(file, no_data_value=list_of_raster[0].no_data_value)
 
     def __getitem__(self, key):
-        try:
-            output = self.raster_array.__getitem__(key.raster_array)
-        except (AttributeError, IndexError):
-            try:
-                output = self.raster_array.__getitem__(key)
-            except IndexError:
-                raise RasterMapError("Invalid indexing")
-            except Exception as e:
-                raise RuntimeError("Unknown error while getting data in raster map: {}".format(e))
 
-        return output
+        if key.__class__ == type(self):
+            key = key.raster_array
+
+        if key.__class__ == slice:
+            key = (key, key)
+
+        if key.__class__ == tuple:
+            if key[0].__class__ == int and key[1].__class__ == int:
+                return self.raster_array.__getitem__(key)
+            else:
+                try:
+                    return self.__class__(self.raster_array.__getitem__(key), self.geo_grid.__getitem__(key),
+                                          no_data_value=self.no_data_value, crs=self.crs)
+                except IndexError:
+                    raise RasterMapError("Invalid indexing")
+                except Exception as e:
+                    raise RuntimeError("Unknown error while getting data in raster map: {}".format(e))
+        elif key.__class__ == np.ndarray:
+            return self.raster_array.__getitem__(key)
+        else:
+            raise RasterMapError("Invalid indexing")
 
     def __setitem__(self, key, value):
 
@@ -881,3 +892,13 @@ def _download_srtm_tile(tile_name):
     archive.close()
 
     return os.path.join(temp_srtm_dir, tif_name)
+
+
+if __name__ == "__main__":
+    test = RasterMap("/home/benjamin/Documents/Data/Resource rasters/Solar maps/Monthly GHI sum/monthly_GHI_01.tif")
+    m0 = test[10:200]
+    m = test[10:200, 10:200]
+    m2 = test[test > 1278]
+    m3 = test[7, 8]
+    print((m0 == m).all())
+    print("done")
