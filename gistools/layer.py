@@ -21,6 +21,7 @@ import numpy as np
 import copy
 
 from numba import jit
+from rdp import rdp
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
 from fiona.errors import FionaValueError
@@ -871,6 +872,17 @@ class GeoLayer:
     # __getitem__ method returns new instance or pandas Series or inner value
     @return_new_instance
     def __getitem__(self, key):
+        """ Get item from layer
+
+        :param key:
+        :return:
+
+        :Example:
+            >>> m = layer[idx]
+            return a Series, but
+            >>> m = layer[[idx]]
+            return a GeoLayer
+        """
         try:
             return self._gpd_df[key].copy()  # .copy()
         except KeyError:
@@ -1279,6 +1291,19 @@ class LineLayer(GeoLayer):
         # Check geometry
         if self._geom_type != 'Line':
             raise LineLayerError("Geometry of LineLayer must be 'Line' but is '{}'".format(self._geom_type))
+
+    @return_new_instance
+    def douglas_peucker(self, tolerance=0):
+        """ Apply the Douglas-Peucker algorithm to line geometries
+
+        :param tolerance: tolerance of accuracy in line generalization algorithm
+        :return:
+        """
+        new_geometry = []
+        for geom in self.geometry:
+            new_geometry.append(LineString(rdp(np.array(geom.coords), epsilon=tolerance)))
+
+        return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
 
     @return_new_instance
     def linemerge(self, by, method="dissolve"):
