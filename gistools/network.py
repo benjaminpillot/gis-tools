@@ -12,7 +12,7 @@ from abc import abstractmethod
 import networkx as nx
 import numpy as np
 from geopandas import GeoDataFrame
-from numba import jit, float64, boolean
+from numba import jit, float64
 from shapely.geometry import Point, LineString
 from shapely.ops import linemerge
 from utils.toolset import split_list_by_index
@@ -868,8 +868,7 @@ class RoadNetwork(Network):
         road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
 
         # Maximum limited speed
-        v_max_one_way, v_max_reverse = \
-            self._get_max_limited_speed(slope, r_curvature, vehicle_weight, gross_hp, uphill_hp, downhill_hp)
+        v_max = self._get_max_limited_speed(slope, r_curvature, vehicle_weight, gross_hp, uphill_hp, downhill_hp)
 
         # Maximum speed at intersection
         v_in_max, v_out_max = self._get_velocity_at_intersection()
@@ -880,10 +879,10 @@ class RoadNetwork(Network):
         for n in range(len(self.roads)):
 
             # Travel time and distance of acceleration
-            t_time_one_way, d_a_one_way = get_travel_time_and_distance_of_acceleration(
-                v_max_one_way[n], road_length[n], v_in_max[n], v_out_max[n], acceleration_rate, deceleration_rate)
-            t_time_reverse, d_a_reverse = get_travel_time_and_distance_of_acceleration(
-                v_max_reverse[n], road_length[n], v_out_max[n], v_in_max[n], acceleration_rate, deceleration_rate)
+            t_time_one_way, d_a_one_way, _ = get_travel_time_and_distance_of_acceleration(
+                v_max["one-way"][n], road_length[n], v_in_max[n], v_out_max[n], acceleration_rate, deceleration_rate)
+            t_time_reverse, d_a_reverse, _ = get_travel_time_and_distance_of_acceleration(
+                v_max["reverse"][n], road_length[n], v_out_max[n], v_in_max[n], acceleration_rate, deceleration_rate)
 
             # Travel time (for mean velocity over road segment)
             v_mean_one_way = road_length[n] / t_time_one_way
@@ -927,23 +926,63 @@ class RoadNetwork(Network):
         road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
 
         # Maximum limited speed
-        v_max_one_way, v_max_reverse = \
-            self._get_max_limited_speed(slope, r_curvature, vehicle_weight, gross_hp, uphill_hp, downhill_hp)
+        v_max = self._get_max_limited_speed(slope, r_curvature, vehicle_weight, gross_hp, uphill_hp, downhill_hp)
 
         # Maximum speed at intersection
         v_in_max, v_out_max = self._get_velocity_at_intersection()
 
-        for v, d, v_in, v_out in zip(v_max_one_way, road_length, v_in_max, v_out_max):
-            time, _ = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration_rate,
-                                                                   deceleration_rate)
+        for v, d, v_in, v_out in zip(v_max["one-way"], road_length, v_in_max, v_out_max):
+            time, _, _ = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration_rate,
+                                                                      deceleration_rate)
             travel_time["one-way"].append(TIME_FORMAT[time_format] * time)
 
-        for v, d, v_in, v_out in zip(v_max_reverse, road_length, v_in_max, v_out_max):
-            time, _ = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in, acceleration_rate,
-                                                                   deceleration_rate)
+        for v, d, v_in, v_out in zip(v_max["reverse"], road_length, v_in_max, v_out_max):
+            time, _, _ = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in, acceleration_rate,
+                                                                      deceleration_rate)
             travel_time["reverse"].append(TIME_FORMAT[time_format] * time)
 
         return travel_time
+
+    def velocity(self, gross_hp, vehicle_weight, acceleration_rate=1.5 * 0.3048, deceleration_rate=-9.5 * 0.3048,
+                 uphill_hp=0.8, downhill_hp=0.6):
+        """ Compute velocity for each road segment
+
+        :param gross_hp:
+        :param vehicle_weight:
+        :param acceleration_rate:
+        :param deceleration_rate:
+        :param uphill_hp:
+        :param downhill_hp:
+        :return:
+        """
+        velocity = {'one-way': [], 'reverse': []}
+        slope = [self.roads.slope_of_geometry(i, slope_format="degree") for i in range(len(self.roads))]
+        r_curvature = [self.roads.radius_of_curvature(i) for i in range(len(self.roads))]
+        road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
+
+        # Maximum limited speed
+        v_max = self._get_max_limited_speed(slope, r_curvature, vehicle_weight, gross_hp, uphill_hp, downhill_hp)
+
+        # Maximum speed at intersection
+        v_in_max, v_out_max = self._get_velocity_at_intersection()
+
+        for v, d, v_in, v_out in zip(v_max["one-way"], road_length, v_in_max, v_out_max):
+            _, _, speed = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration_rate,
+                                                                       deceleration_rate)
+            velocity["one-way"].append(speed)
+
+        for v, d, v_in, v_out in zip(v_max["reverse"], road_length, v_in_max, v_out_max):
+            _, _, speed = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in,
+                                                                       acceleration_rate, deceleration_rate)
+            velocity["reverse"].append(speed)
+
+        velocity["v_max_one_way"] = v_max["one-way"]
+        velocity["v_max_reverse"] = v_max["reverse"]
+        velocity["v_slope_one_way"] = v_max["slope_one_way"]
+        velocity["v_slope_reverse"] = v_max["slope_reverse"]
+        velocity["v_curvature"] = v_max["curvature"]
+
+        return velocity
 
     def _get_velocity_at_intersection(self):
         """ Velocity in crossing intersections
@@ -975,13 +1014,11 @@ class RoadNetwork(Network):
         :param downhill_hp:
         :return:
         """
+        v_max = dict(slope_one_way=[], slope_reverse=[], curvature=[])
 
         # Maximum speed due to slope (1 mechanical hp = 745.699872 W)
         ehp_uphill = gross_hp * uphill_hp * 745.699872
         ehp_downhill = gross_hp * downhill_hp * 745.699872
-        v_slope_one_way = []
-        v_slope_reverse = []
-        v_radius = []
         for n in range(len(self.roads)):
             v_one_way = np.zeros(len(slope[n]))
             v_reverse = np.zeros(len(slope[n]))
@@ -996,17 +1033,17 @@ class RoadNetwork(Network):
                 slope[n] > 0]), 0)
             v_reverse[slope[n] <= 0] = ehp_uphill / (grade_resistance[slope[n] <= 0] + rolling_resistance[slope[n] <=
                                                                                                           0])
-            v_slope_one_way.append(v_one_way)
-            v_slope_reverse.append(v_reverse)
-            v_radius.append((self.roads.rollover_criterion[n] * r_curvature[n] * 9.81) ** 0.5)
+            v_max["slope_one_way"].append(v_one_way)
+            v_max["slope_reverse"].append(v_reverse)
+            v_max["curvature"].append((self.roads.rollover_criterion[n] * r_curvature[n] * 9.81) ** 0.5)
 
         # Get maximum limiting speed, i.e. minimum among all previous values
-        v_max_one_way = [np.minimum(np.minimum(v_r, v_s), v_limit)
-                         for v_r, v_s, v_limit in zip(v_radius, v_slope_one_way, self.roads.max_speed)]
-        v_max_reverse = [np.minimum(np.minimum(v_r, v_s), v_limit)
-                         for v_r, v_s, v_limit in zip(v_radius, v_slope_reverse, self.roads.max_speed)]
+        v_max["one-way"] = [np.minimum(np.minimum(v_r, v_s), v_limit) for v_r, v_s, v_limit in
+                            zip(v_max["curvature"], v_max["slope_one_way"], self.roads.max_speed)]
+        v_max["reverse"] = [np.minimum(np.minimum(v_r, v_s), v_limit) for v_r, v_s, v_limit in
+                            zip(v_max["curvature"], v_max["slope_reverse"], self.roads.max_speed)]
 
-        return v_max_one_way, v_max_reverse
+        return v_max
 
 
 @jit((float64[:], float64[:], float64, float64, float64, float64), cache=True, nopython=True)
@@ -1088,7 +1125,7 @@ def get_travel_time_and_distance_of_acceleration(v_max, road_segment_length, v_i
             v[n + 1] = v_m
             n += 1
 
-    return t_time, d_a
+    return t_time, d_a, v
 
 
 # @jit(cache=True, nopython=True)
