@@ -768,7 +768,9 @@ def radius_of_curvature(line):
     elif len(line.coords) < 3:
         return np.array([10000])
 
-    divider = np.sqrt(np.fabs((a + b + c) * (b + c - a) * (c + a - b) * (a + b - c)))
+    heron = (a + b + c) * (b + c - a) * (c + a - b) * (a + b - c)
+    heron[heron < 0] = 0
+    divider = np.sqrt(heron)
     divider[divider == 0] = 0.1
     result = a * b * c / divider
 
