@@ -12,6 +12,7 @@ import numpy as np
 import networkx as nx
 
 from math import sqrt as msqrt
+
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
@@ -743,40 +744,74 @@ def polygon_collection_to_graph(polygon_collection, weights, split, is_contiguou
     return graph
 
 
-def radius_of_curvature(line):
+def radius_of_curvature(line, method="osculating"):
     """ Compute curvature radius of LineString
 
     :param line:
+    :param method: method for computing radius of curvature {'circumscribe', 'osculating'}
     :return:
     """
-    segment_length = length_of_segments(line)
-    a, b = segment_length[:-1:], segment_length[1::]
-    c = []
-    if len(line.coords) > 3:
-        length_2_by_2_start = length_of_segments(LineString(line.coords[::2]))
-        length_2_by_2_end = length_of_segments(LineString(line.coords[1::2]))
+    def norm(xx, yy):
+        return np.sqrt(xx ** 2 + yy ** 2)
 
-        for n in range(len(length_2_by_2_end)):
-            c.extend([length_2_by_2_start[n], length_2_by_2_end[n]])
+    def tangent_vector(xi, yi):
+        return (xi[2::] - xi[:-2]) / norm(xi[2::] - xi[:-2], yi[2::] - yi[:-2]), \
+               (yi[2::] - yi[:-2]) / norm(xi[2::] - xi[:-2], yi[2::] - yi[:-2])
 
-        if len(length_2_by_2_start) > len(length_2_by_2_end):
-            c.append(length_2_by_2_start[-1])
+    if method == "osculating":
 
-    elif len(line.coords) == 3:
-        c = LineString(line.coords[::2]).length
+        if len(line.coords) >= 3:
+            x = np.array(line.coords.xy[0])
+            y = np.array(line.coords.xy[1])
+            xi1 = np.concatenate((x[1::], [x[-1]]))
+            yi1 = np.concatenate((y[1::], [y[-1]]))
+            xi_1 = np.concatenate(([x[0]], x[:-1]))
+            yi_1 = np.concatenate(([y[0]], y[:-1]))
 
-    elif len(line.coords) < 3:
-        return np.array([10000])
+            tangent_vector_xi1, tangent_vector_yi1 = tangent_vector(xi1, yi1)
+            tangent_vector_xi_1, tangent_vector_yi_1 = tangent_vector(xi_1, yi_1)
 
-    heron = (a + b + c) * (b + c - a) * (c + a - b) * (a + b - c)
-    heron[heron < 0] = 0
-    divider = np.sqrt(heron)
-    divider[divider == 0] = 0.1
-    result = a * b * c / divider
+            coefficient_of_curvature = \
+                norm(tangent_vector_xi1 - tangent_vector_xi_1, tangent_vector_yi1 - tangent_vector_yi_1) /\
+                norm(x[2::] - x[:-2], y[2::] - y[:-2])
+            coefficient_of_curvature[coefficient_of_curvature == 0] = 1e-6
+            rad_of_curvature = 1 / coefficient_of_curvature
+        else:
+            return np.array([10000])
+
+    elif method == "circumscribe":
+
+        segment_length = length_of_segments(line)
+        a, b = segment_length[:-1:], segment_length[1::]
+        c = []
+        if len(line.coords) > 3:
+            length_2_by_2_start = length_of_segments(LineString(line.coords[::2]))
+            length_2_by_2_end = length_of_segments(LineString(line.coords[1::2]))
+
+            for n in range(len(length_2_by_2_end)):
+                c.extend([length_2_by_2_start[n], length_2_by_2_end[n]])
+
+            if len(length_2_by_2_start) > len(length_2_by_2_end):
+                c.append(length_2_by_2_start[-1])
+
+        elif len(line.coords) == 3:
+            c = LineString(line.coords[::2]).length
+
+        elif len(line.coords) < 3:
+            return np.array([10000])
+
+        heron = (a + b + c) * (b + c - a) * (c + a - b) * (a + b - c)
+        heron[heron < 0] = 0
+        divider = np.sqrt(heron)
+        divider[divider == 0] = 0.1
+        rad_of_curvature = a * b * c / divider
+
+    else:
+        rad_of_curvature = []
 
     # Return values and add replicate to beginning of array (as result of curvature computation returns an array with
     #  length = length(line.coords) - 2): return array with length = length(line.coords) - 1
-    return np.concatenate(([result[0]], result))
+    return np.concatenate(([rad_of_curvature[0]], rad_of_curvature))
 
 
 def shape_factor(polygon, convex_hull):
