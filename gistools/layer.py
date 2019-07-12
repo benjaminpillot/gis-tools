@@ -487,35 +487,35 @@ class GeoLayer:
             yield self.index[num], self.xy(num)[0], self.xy(num)[1]
             num += 1
 
-    def iterxy_in_geometry(self, n):
+    def iterxy_in_geometry(self, geometry_id):
         """ Iterate over x and y coords of given geometry
 
-        :param n: geometry's index
+        :param geometry_id: geometry's index
         :return:
         """
         num = 0
-        while num < len(self.xy(n)[0]):
-            yield self.xy(n)[0][num], self.xy(n)[1][num]
+        while num < len(self.xy(geometry_id)[0]):
+            yield self.xy(geometry_id)[0][num], self.xy(geometry_id)[1][num]
             num += 1
 
-    def length_xy_of_geometry(self, n):
+    def length_xy_of_geometry(self, geometry_id):
         """ Compute 2D length of given geometry
 
-        :param n:
+        :param geometry_id:
         :return: numpy array of length values
         """
-        x, y = np.array(self.xy(n)[0]), np.array(self.xy(n)[1])
+        x, y = np.array(self.xy(geometry_id)[0]), np.array(self.xy(geometry_id)[1])
         return np.sqrt((x[1::] - x[:-1:]) ** 2 + (y[1::] - y[:-1:]) ** 2)
 
-    def length_xyz_of_geometry(self, n):
+    def length_xyz_of_geometry(self, geometry_id):
         """ Compute 3D length of given geometry
 
-        :param n:
+        :param geometry_id:
         :return: numpy array of length values
         """
-        x, y = np.array(self.xy(n)[0]), np.array(self.xy(n)[1])
-        if self.exterior[n].has_z:
-            z = np.array(self.exterior[n].coords)[:, 2]
+        x, y = np.array(self.xy(geometry_id)[0]), np.array(self.xy(geometry_id)[1])
+        if self.exterior[geometry_id].has_z:
+            z = np.array(self.exterior[geometry_id].coords)[:, 2]
         else:
             z = np.zeros(len(x))
 
@@ -1350,13 +1350,14 @@ class LineLayer(GeoLayer):
 
         return outdf
 
-    def radius_of_curvature(self, n):
+    def radius_of_curvature_of_geometry(self, geometry_id, method="osculating"):
         """ Compute road's radius of curvature
 
-        :param n:
+        :param geometry_id: geometry's ID
+        :param method:
         :return:
         """
-        return radius_of_curvature(self.geometry[n])
+        return radius_of_curvature(self.geometry[geometry_id], method=method)
 
     def slope(self, slope_format="percent"):
         """ Compute 3D line slope
@@ -1377,25 +1378,25 @@ class LineLayer(GeoLayer):
 
         return slope
 
-    def slope_of_geometry(self, n, slope_format="percent", z_spatial_resolution=0):
+    def slope_of_geometry(self, geometry_id, slope_format="percent", z_spatial_resolution=0):
         """ Compute 3D slope of given geometry
 
-        :param n: geometry index
+        :param geometry_id: geometry index
         :param slope_format:
         :param z_spatial_resolution: spatial accuracy on Z estimates (e.g.: DEM resolution from which Z has been
         derived)
         :return:
         """
         slope_format = check_string(slope_format, {'degree', 'percent'})
-        if self.geometry[n].has_z:
-            z = np.array(self.exterior[n].coords)[:, 2]
+        if self.geometry[geometry_id].has_z:
+            z = np.array(self.exterior[geometry_id].coords)[:, 2]
             if slope_format == "percent":
-                slope = 100 * (z[1::] - z[:-1:])/np.maximum(z_spatial_resolution, self.length_xy_of_geometry(n))
+                slope = 100 * (z[1::] - z[:-1:])/np.maximum(z_spatial_resolution, self.length_xy_of_geometry(geometry_id))
             else:
-                slope = np.arctan((z[1::] - z[:-1:])/np.maximum(z_spatial_resolution, self.length_xy_of_geometry(n)))\
+                slope = np.arctan((z[1::] - z[:-1:]) / np.maximum(z_spatial_resolution, self.length_xy_of_geometry(geometry_id)))\
                         * 180/np.pi
         else:
-            slope = np.zeros(len(self.exterior[n].coords))
+            slope = np.zeros(len(self.exterior[geometry_id].coords))
 
         return slope
 
