@@ -864,7 +864,7 @@ class RoadNetwork(Network):
         """
 
         slope = [self.roads.slope_of_geometry(i, slope_format="degree") for i in range(len(self.roads))]
-        r_curvature = [self.roads.radius_of_curvature(i) for i in range(len(self.roads))]
+        r_curvature = [self.roads.radius_of_curvature_of_geometry(i) for i in range(len(self.roads))]
         road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
 
         # Maximum limited speed
@@ -922,7 +922,7 @@ class RoadNetwork(Network):
         """
         travel_time = {'one-way': [], 'reverse': []}
         slope = [self.roads.slope_of_geometry(i, slope_format="degree") for i in range(len(self.roads))]
-        r_curvature = [self.roads.radius_of_curvature(i) for i in range(len(self.roads))]
+        r_curvature = [self.roads.radius_of_curvature_of_geometry(i) for i in range(len(self.roads))]
         road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
 
         # Maximum limited speed
@@ -957,7 +957,7 @@ class RoadNetwork(Network):
         """
         velocity = {'one-way': [], 'reverse': []}
         slope = [self.roads.slope_of_geometry(i, slope_format="degree") for i in range(len(self.roads))]
-        r_curvature = [self.roads.radius_of_curvature(i) for i in range(len(self.roads))]
+        r_curvature = [self.roads.radius_of_curvature_of_geometry(i) for i in range(len(self.roads))]
         road_length = [self.roads.length_xyz_of_geometry(i) for i in range(len(self.roads))]
 
         # Maximum limited speed
@@ -1126,55 +1126,3 @@ def get_travel_time_and_distance_of_acceleration(v_max, road_segment_length, v_i
             n += 1
 
     return t_time, d_a, v
-
-
-# @jit(cache=True, nopython=True)
-# def get_travel_time(v_max, road_length, v_in_max, v_out_max, acceleration, deceleration, time_format, one_way):
-#
-#     travel_time = []
-#
-#     for v, d, v_in, v_out in zip(v_max, road_length, v_in_max, v_out_max):
-#         if one_way:
-#             time, _ = get_travel_time_and_distance_of_acceleration(v, d, v_in, v_out, acceleration, deceleration)
-#         else:
-#             time, _ = get_travel_time_and_distance_of_acceleration(v[::-1], d[::-1], v_out, v_in, acceleration,
-#                                                                    deceleration)
-#         travel_time.append(time_format * time)
-#
-#     return travel_time
-#
-#
-# @jit(cache=True, nopython=True)
-# def get_fuel_consumption(nb_roads, v_max_one_way, v_max_reverse, road_length, v_in_max, v_out_max, acceleration,
-#                          deceleration, rolling_coefficient, vehicle_weight, slope, rho_air, vehicle_frontal_area,
-#                          drag_resistance, mass_correction_factor, fuel_energy_density, engine_efficiency):
-#
-#     fuel_demand_one_way = []
-#     fuel_demand_reverse = []
-#
-#     for n in range(nb_roads):
-#         # Travel time and distance of acceleration
-#         t_time_one_way, d_a_one_way = get_travel_time_and_distance_of_acceleration(
-#             v_max_one_way[n], road_length[n], v_in_max[n], v_out_max[n], acceleration, deceleration)
-#         t_time_reverse, d_a_reverse = get_travel_time_and_distance_of_acceleration(
-#             v_max_reverse[n], road_length[n], v_out_max[n], v_in_max[n], acceleration, deceleration)
-#
-#         # Travel time (for mean velocity over road segment)
-#         v_mean_one_way = road_length[n] / t_time_one_way
-#         v_mean_reverse = road_length[n] / t_time_reverse
-#
-#         # Energy demand
-#         u_r = rolling_coefficient[n] * vehicle_weight * 9.81 * np.cos(slope[n] * np.pi / 180) * road_length[n]
-#         u_a_one_way = 0.5 * rho_air * vehicle_frontal_area * drag_resistance * v_mean_one_way ** 2 * road_length[n]
-#         u_a_reverse = 0.5 * rho_air * vehicle_frontal_area * drag_resistance * v_mean_reverse ** 2 * road_length[n]
-#         u_i_one_way = mass_correction_factor * vehicle_weight * acceleration * d_a_one_way
-#         u_i_reverse = mass_correction_factor * vehicle_weight * acceleration * d_a_reverse
-#         u_g_one_way = vehicle_weight * 9.81 * np.sin(slope[n] * np.pi / 180) * road_length[n]
-#         u_g_reverse = vehicle_weight * 9.81 * np.sin(-slope[n] * np.pi / 180) * road_length[n]
-#
-#         fuel_demand_one_way.append(np.maximum(0, (u_r + u_a_one_way + u_i_one_way + u_g_one_way) * 1e-6 / (
-#                 fuel_energy_density * engine_efficiency)))
-#         fuel_demand_reverse.append(np.maximum(0, (u_r + u_a_reverse + u_i_reverse + u_g_reverse) * 1e-6 / (
-#                 fuel_energy_density * engine_efficiency)))
-#
-#     return fuel_demand_one_way, fuel_demand_reverse
