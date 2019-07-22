@@ -26,7 +26,7 @@ setup(name='gis_tools',
                         "numpy>=1.14.3",
                         "pandas>=0.24.2",
                         "progressbar2>=3.39.3",
-                        "pyproj>=1.9.5",
+                        "pyproj==2.0.2"
                         "rasterio>=1.0.18",
                         "rtree>=0.8.3",
                         "scipy>=1.1.0",
