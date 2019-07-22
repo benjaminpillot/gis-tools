@@ -22,6 +22,10 @@ class GeoGridWarning(Warning):
     pass
 
 
+class ProjectionWarning(Warning):
+    pass
+
+
 class ZonalStatisticsError(Exception):
     pass
 
