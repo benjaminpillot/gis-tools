@@ -315,8 +315,9 @@ class RasterMap:
         :return: RasterMap
         """
         if layer is not None:
-            ll_point = (layer.bounds[0], layer.bounds[1])
-            ur_point = (layer.bounds[2], layer.bounds[3])
+            check_proj(layer.crs, self.crs)
+            ll_point = (layer.bounds[1], layer.bounds[0])  # Warning: (lat, lon) in that order !
+            ur_point = (layer.bounds[3], layer.bounds[2])
 
         try:
             ll_point_r, ll_point_c = self._geo_grid.latlon_to_2d_index(ll_point[0], ll_point[1])
