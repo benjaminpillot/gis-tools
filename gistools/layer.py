@@ -37,7 +37,7 @@ from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
 from gistools.coordinates import GeoGrid, r_tree_idx
 from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, \
-    PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError
+    PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
     area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana
@@ -66,7 +66,8 @@ def check_proj(*crs, warning=True):
         if not is_equal(crs1, crs2) and not warning:
             raise TypeError("Projections should be the same but are '%s' and '%s'" % (crs1, crs2))
         elif not is_equal(crs1, crs2) and warning:
-            print("Different projections ('%s' and '%s') might give unexpected results" % (crs1, crs2))
+            warnings.warn("Different projections ('%s' and '%s') might give unexpected results" % (crs1, crs2),
+                          ProjectionWarning)
 
 
 # Decorator for returning new instance of GeoLayer and subclasses
@@ -915,7 +916,7 @@ class GeoLayer:
 
     @property
     def geo_type(self):
-        if self.pyproj.is_latlong():
+        if self.pyproj.crs.is_geographic:
             return "latlon"
         else:
             return "equal"
@@ -1391,10 +1392,11 @@ class LineLayer(GeoLayer):
         if self.geometry[geometry_id].has_z:
             z = np.array(self.exterior[geometry_id].coords)[:, 2]
             if slope_format == "percent":
-                slope = 100 * (z[1::] - z[:-1:])/np.maximum(z_spatial_resolution, self.length_xy_of_geometry(geometry_id))
+                slope = 100 * (z[1::] - z[:-1:])/np.maximum(z_spatial_resolution,
+                                                            self.length_xy_of_geometry(geometry_id))
             else:
-                slope = np.arctan((z[1::] - z[:-1:]) / np.maximum(z_spatial_resolution, self.length_xy_of_geometry(geometry_id)))\
-                        * 180/np.pi
+                slope = np.arctan((z[1::] - z[:-1:]) / np.maximum(z_spatial_resolution,
+                                                                  self.length_xy_of_geometry(geometry_id))) * 180/np.pi
         else:
             slope = np.zeros(len(self.exterior[geometry_id].coords))
 
