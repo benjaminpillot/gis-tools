@@ -1,4 +1,4 @@
-cpc.geogrids>=0.2.3
+cpc.geogrids==0.2.3
 elevation>=1.0.5
 fiona>=1.7.13
 gdal>=2.2.4
@@ -10,7 +10,7 @@ networkx>=2.1
 numpy>=1.14.3
 pandas >= 0.24.2
 progressbar2 >= 3.39.3
-pyproj>=1.9.5
+pyproj==2.0.2
 rasterio>=1.0.18
 rtree>=0.8.3
 scipy>=1.1.0
