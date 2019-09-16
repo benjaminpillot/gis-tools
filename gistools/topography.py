@@ -16,6 +16,7 @@ import numpy as np
 from gistools.coordinates import Ellipsoid
 
 
+# TODO: use Numba
 # TODO: use Dozier algorithm (1981)
 # TODO: use algorithm from A. James Stewart (1998)
 
