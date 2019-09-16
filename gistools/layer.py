@@ -20,7 +20,7 @@ import geopandas as gpd
 import numpy as np
 import copy
 
-from numba import jit
+from numba import jit, float64, int64
 from rdp import rdp
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
@@ -1207,7 +1207,7 @@ class PolygonLayer(GeoLayer):
         :param surface_threshold: threshold above which intersection predicate is used
         :return:
         """
-        @jit(nopython=True)
+        @jit((float64, float64, float64, float64, int64), cache=True, nopython=True)
         def generate_rd_pt(xmin, xmax, ymin, ymax, nb_pts):
             pts = []
             for n in range(nb_pts):
