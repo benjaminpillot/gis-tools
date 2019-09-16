@@ -838,7 +838,7 @@ class GeoLayer:
             os.remove(file_path)
         except OSError:
             pass
-        self._gpd_df.to_file(file_path, driver, **kwargs)
+        self._gpd_df.to_file(file_path, driver=driver, **kwargs)
 
     def xy(self, n):
         """ Return xy coords of geo layer nth geometry
