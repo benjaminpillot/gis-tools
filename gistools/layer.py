@@ -686,6 +686,22 @@ class GeoLayer:
 
         return outdf
 
+    def pairwise_distance(self, other):
+        """ Compute distance between all elements from two GeoLayers
+
+        Return the pairwise matrix of distances between
+        two geo layers
+        :param other:
+        :return:
+        """
+        distance_matrix = np.zeros((len(self), len(other)))
+
+        for m, geom in enumerate(self.geometry):
+            for n, other_geom in enumerate(other.geometry):
+                distance_matrix[m, n] = geom.distance(other_geom)
+
+        return distance_matrix
+
     def project(self, other):
         """ Project layer geometry onto other geometry
 
