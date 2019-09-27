@@ -32,6 +32,7 @@ setup(name='gis_tools',
                         "rtree>=0.8.3",
                         "scipy>=1.1.0",
                         "shapely>=1.6.4"],
+      python_requires='>=3',
       license='GNU GPL v3.0',
       packages=find_packages(),
       zip_safe=False)
