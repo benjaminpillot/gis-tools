@@ -396,7 +396,7 @@ class RasterMap:
         """ Convert raster into vector polygon(s)
 
         :param field_name: name of the corresponding field in the final shape file
-        :param layer_name: name of corresponding lines_
+        :param layer_name: name of resulting layer
         :param is_8_connected: pixel connectivity used for polygon
         :return:
         """
