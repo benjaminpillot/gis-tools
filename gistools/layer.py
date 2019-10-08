@@ -144,7 +144,7 @@ class GeoLayer:
     def __init__(self, layer_to_set, name: str = 'layer'):
         """ GeoLayer constructor
 
-        :param layer_to_set: geo file or geopandas data frame
+        :param layer_to_set: geo file (geojson/shape) or geopandas data frame
         """
 
         try:
@@ -177,20 +177,20 @@ class GeoLayer:
         if len(gpd_df) == 0:
             raise GeoLayerEmptyError("Empty geo-layer dataset")
 
-        if 'geometry' not in gpd_df.keys():
+        # Warning: preferable using geometry attribute as it represents the active geometry for geopandas
+        if not hasattr(gpd_df, "geometry"):
             raise GeoLayerError("Geometry is not defined in dataset")
 
         # Geo layer must own consistent geometry
         geom_type = {'LineString': "Line", "MultiLineString": "Line", "Polygon": "Polygon", "MultiPolygon":
                      "Polygon", "Point": "Point", "MultiPoint": "Point"}
-        geometry = [geom_type[geom] for geom in gpd_df["geometry"].type]
+        geometry = [geom_type[geom] for geom in gpd_df.geometry.type]
         if len(np.unique(geometry)) > 1:
             raise GeoLayerError("Layer geometry must be consistent")
 
         # Set attributes
         self._geom_type = geometry[0]
         self._gpd_df = gpd_df
-        # self._r_tree_idx = None  # Set to None at creation (only compute the first time it is called)
         self._point_layer_class = PointLayer  # Point layer class/subclass corresponding to given layer class/subclass
         self._polygon_layer_class = PolygonLayer  # Corresponding polygon layer class/subclass
         self._line_layer_class = LineLayer  # Line layer class/subclass corresponding to given layer class/subclass
@@ -1002,14 +1002,20 @@ class GeoLayer:
         return min_dist, nearest_neighbor
 
     @classmethod
-    def from_gpd(cls, *gpd_args, **gpd_kwargs):
+    def from_gpd(cls, *gpd_args, **kwargs):
         """ Build layer from geopandas GeoDataFrame arguments
 
         :param gpd_args: geopandas arguments
-        :param gpd_kwargs: geopandas keyword arguments
+        :param kwargs: geopandas/geolayer keyword arguments
         :return:
         """
-        return cls(gpd.GeoDataFrame(*gpd_args, **gpd_kwargs))
+        if "name" in kwargs.keys():
+            name = kwargs.pop("name")
+            layer = cls(gpd.GeoDataFrame(*gpd_args, **kwargs), name=name)
+        else:
+            layer = cls(gpd.GeoDataFrame(*gpd_args, **kwargs))
+
+        return layer
 
 
 class PolygonLayer(GeoLayer):
