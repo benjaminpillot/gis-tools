@@ -86,6 +86,10 @@ class RoadNetworkError(NetworkError):
     pass
 
 
+class SpatialDatabaseError(Exception):
+    pass
+
+
 class GeoLayerWarning(Warning):
     pass
 
@@ -95,4 +99,8 @@ class PolygonLayerWarning(GeoLayerWarning):
 
 
 class ImportMetisWarning(Warning):
+    pass
+
+
+class SpatialDatabaseWarning(Warning):
     pass
