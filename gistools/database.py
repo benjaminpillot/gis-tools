@@ -90,9 +90,3 @@ class SpatialDatabase:
     def table_names(self):
         inspector = inspect(self.engine)
         return inspector.get_table_names()
-
-
-if __name__ == "__main__":
-    test = SpatialDatabase("apureza", "Apureza1!", "193.48.189.24", "apureza")
-    m = test.table_to_layer('app1_routes')
-    print(m)
