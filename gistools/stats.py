@@ -92,6 +92,22 @@ class ZonalStatistics:
         """
         return self._get_statistic(method=np.mean, weight_method=weight_average)
 
+    def no_data_count(self, normalized: bool = True):
+        """ Count no data within zone
+
+        :return:
+        """
+        def count(raster):
+            if normalized:
+                return [cell[np.isnan(cell)].size / cell.size for cell in self._get_raster_cell_values(raster)]
+            else:
+                return [cell[np.isnan(cell)].size for cell in self._get_raster_cell_values(raster)]
+
+        if isinstance(self.raster, list):
+            return [count(r) for r in self.raster]
+        else:
+            return count(self.raster)
+
     def std(self):
         """ Compute zonal standard deviation
 
