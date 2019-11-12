@@ -93,13 +93,14 @@ class ZonalStatistics:
         return self._get_statistic(method=np.mean, weight_method=weight_average)
 
     def no_data_count(self, normalized: bool = True):
-        """ Count no data within zone
+        """ Count no data (NaN) within zone
 
         :return:
         """
         def count(raster):
             if normalized:
-                return [cell[np.isnan(cell)].size / cell.size for cell in self._get_raster_cell_values(raster)]
+                return [cell[np.isnan(cell)].size / cell.size if cell.size != 0 else np.nan for cell in
+                        self._get_raster_cell_values(raster)]
             else:
                 return [cell[np.isnan(cell)].size for cell in self._get_raster_cell_values(raster)]
 
