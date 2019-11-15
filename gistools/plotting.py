@@ -74,11 +74,11 @@ def plot_geolayer(gl, ax=None, attribute=None, layer_label: str = None, layer_co
     if labels is not None:
         check_type(labels, str)
         # label_list = []
-        new_gl = gl.shallow_copy()
-        new_gl['label_point'] = new_gl["geometry"].apply(lambda x: x.representative_point().coords[:])
-        new_gl['label_point'] = [lb[0] for lb in new_gl["label_point"]]
+        new_layer = gl.shallow_copy()
+        new_layer['label_point'] = new_layer.geometry.apply(lambda x: x.representative_point().coords[:])
+        new_layer['label_point'] = [lb[0] for lb in new_layer["label_point"]]
 
-        for _, row in new_gl.iterrows():
+        for _, row in new_layer.iterrows():
             xy = row["label_point"]
             s = row["name"]
             ax.annotate(s=s, xy=xy)
