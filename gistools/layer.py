@@ -70,8 +70,12 @@ def check_proj(*crs, warning=True):
                           ProjectionWarning)
 
 
-# Decorator for returning new instance of GeoLayer and subclasses
 def return_new_instance(method):
+    """ Decorator for returning new instance of GeoLayer and subclasses
+
+    :param method:
+    :return:
+    """
     @wraps(method)
     def _return_new_instance(self, *args, **kwargs):
         output = method(self, *args, **kwargs)
@@ -83,8 +87,12 @@ def return_new_instance(method):
     return _return_new_instance
 
 
-# Decorator for wrapping iteration methods over geometries of layer
 def iterate_over_geometry(method):
+    """ Decorator for wrapping iteration methods over geometries of layer
+
+    :param method:
+    :return:
+    """
 
     @wraps(method)
     @return_new_instance
@@ -270,9 +278,9 @@ class GeoLayer:
 
     @type_assert(distance=(int, float))
     def buffer(self, distance, resolution=16):
-        """ Return buffer geometry
+        """ Return layer with buffer geometry
 
-        Return buffer zone(s) around object
+        Return buffer zone(s) around object in new layer
         :param distance: radius of the buffer zone
         :param resolution:
         :return: PolygonLayer instance
@@ -373,9 +381,9 @@ class GeoLayer:
         :return:
         """
         outdf = self._gpd_df.copy()
-        outdf["geometry"] = outdf["geometry"].apply(lambda geom: geom.wkb)  # wkb to make geometry hashable
+        outdf.geometry = outdf.geometry.apply(lambda geom: geom.wkb)  # wkb to make geometry hashable
         outdf = outdf.drop_duplicates(*args, **kwargs)
-        outdf["geometry"] = outdf["geometry"].apply(lambda geom: wkb.loads(geom))
+        outdf.geometry = outdf.geometry.apply(lambda geom: wkb.loads(geom))
 
         return outdf
 
@@ -443,15 +451,19 @@ class GeoLayer:
     def intersects(self, other):
         """ Does layer intersect with other ? (Not element wise)
 
-        :param other:
-        :return:
+        :param other: GeoLayer instance
+        :return: numpy array of boolean
         """
-        check_type(other, GeoLayer)
+        try:
+            check_type(other, GeoLayer)
+        except TypeError:
+            raise GeoLayerError("input must be a geo layer but is: %s" % other.__class__)
+
         is_intersecting = []
         for geom in self.geometry:
             is_intersecting.append(any(intersects(geom, other.geometry, other.r_tree_idx)))
 
-        return is_intersecting
+        return np.asarray(is_intersecting)
 
     def is_exploded(self):
         """ Test if geometry is "exploded"
@@ -632,8 +644,8 @@ class GeoLayer:
     def overlay(self, other, how):
         """ Apply overlay geometry operation from another layer (same dimension or higher)
 
-        :param other:
-        :param how:
+        :param other: GeoLayer instance
+        :param how: type of overlay geometry operation
         :return:
         """
         check_proj(self.crs, other.crs)
@@ -649,42 +661,17 @@ class GeoLayer:
             except TypeError:
                 raise GeoLayerError("other must be PolygonLayer but is '%s'" % other.__class__)
 
-        how = check_string(how, ("intersection", "difference", "union", "symmetric_difference", "identity"))
+        how = check_string(how, ("intersection", "difference", "union", "symmetric_difference"))
         # TODO: implement "union", "symmetric_difference" and "identity" methods
 
-        new_geom = []
         if how == "intersection":
-            outdf = gpd.GeoDataFrame(columns=list(self.attributes()) + list(other.attributes()), crs=self.crs)
-            for i, geometry in enumerate(self.geometry):
-                is_intersecting = intersects(geometry, other.geometry, other.r_tree_idx)
-                if any(is_intersecting):
-                    new_geom.extend([geometry.intersection(cascaded_union([geom for geom in other.geometry[
-                        is_intersecting]]))])
-                    other_layer = other[is_intersecting]
-                    df = gpd.GeoDataFrame().append([self._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-                    outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
-
+            return _intersection(self, other)
         elif how == "difference":
-            outdf = gpd.GeoDataFrame(columns=self.attributes(), crs=self.crs)
-            for i, geometry in enumerate(self.geometry):
-                is_intersecting = intersects(geometry, other.geometry, other.r_tree_idx)
-                if any(is_intersecting):
-                    diff_result = explode([geometry.difference(cascaded_union([geom for geom in other.geometry[
-                        is_intersecting]]))])
-                    new_geom.extend(diff_result)
-                    if len(diff_result) > 0:
-                        outdf = outdf.append([self._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
-                else:
-                    new_geom.append(geometry)
-                    outdf = outdf.append(self._gpd_df.iloc[i], ignore_index=True)
-
-        else:
-            outdf = self._gpd_df.copy()
-
-        outdf = outdf.drop(columns=["geometry"])
-        outdf.geometry = new_geom
-
-        return outdf
+            return _difference(self, other)
+        elif how == "union":
+            return _union(self, other)
+        else:  # symmetric_difference
+            return _symmetric_difference(self, other)
 
     def pairwise_distance(self, other):
         """ Compute distance between all elements from two GeoLayers
@@ -1320,7 +1307,7 @@ class LineLayer(GeoLayer):
         """ Apply the Douglas-Peucker algorithm to line geometries
 
         :param tolerance: tolerance of accuracy in line generalization algorithm
-        :return:
+        :return: LineLayer instance
         """
         new_geometry = []
         for geom in self.geometry:
@@ -1505,3 +1492,106 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
+
+
+def _difference(layer1, layer2):
+    """ Difference between 2 layers
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geometry = []
+    outdf = gpd.GeoDataFrame(columns=layer1.attributes(), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            diff_result = explode([geometry.difference(cascaded_union([geom for geom in layer2.geometry[
+                is_intersecting]]))])
+            new_geometry.extend(diff_result)
+            if len(diff_result) > 0:
+                outdf = outdf.append([layer1._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
+        else:
+            new_geometry.append(geometry)
+            outdf = outdf.append(layer1._gpd_df.iloc[i], ignore_index=True)
+
+    outdf.geometry = new_geometry
+    return outdf
+
+
+def _intersection(layer1, layer2):
+    """ Intersection between 2 layers
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geometry = []
+    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
+                is_intersecting]]))])
+            other_layer = layer2[is_intersecting]
+            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+
+    outdf.geometry = new_geometry
+    return outdf
+
+
+def _symmetric_difference(layer1, layer2):
+    """
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geometry = []
+    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
+                is_intersecting]]))])
+            other_layer = layer2[is_intersecting]
+            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+
+    outdf.geometry = new_geometry
+    return outdf
+
+
+def _union(layer1, layer2):
+    """ Union of 2 layers
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geom = []
+    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            new_geom.extend([cascaded_union([geometry] + [geom for geom in layer2.geometry[is_intersecting]])])
+            other_layer = layer2[is_intersecting]
+            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+        else:
+            new_geom.append(geometry)
+            df = gpd.GeoDataFrame().append(layer1._gpd_df.iloc[i], ignore_index=True)
+            # TODO
+
+    # outdf = outdf.drop(columns=["geometry"])
+    outdf.geometry = new_geom
+    return outdf
+
+
+if __name__ == "__main__":
+    from utils.sys.timer import Timer
+    test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
+    with Timer() as t2:
+        g2 = test.douglas_peucker(show_progressbar=False)
+    print("dp1: %s" % t2)
