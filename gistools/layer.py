@@ -87,49 +87,74 @@ def return_new_instance(method):
     return _return_new_instance
 
 
-def iterate_over_geometry(method):
+def iterate_over_geometry(replace_by_single=False):
     """ Decorator for wrapping iteration methods over geometries of layer
 
-    :param method:
+    :param replace_by_single: if True, output layer has the same length, each geometry is replaced by a new single one.
+    If False, output layer gets a new length where each geometry is replaced by multiple geometries.
     :return:
     """
+    def decorate(method):
+        """
 
-    @wraps(method)
-    @return_new_instance
-    def wrapper(self, *args, **kwargs):
-        outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-        append_bool = np.full(len(self), False)
+        :param method:
+        :return:
+        """
 
-        # Display progress bar in console if necessary
-        try:
-            show_progressbar = kwargs["show_progressbar"]
-        except KeyError:
-            show_progressbar = False
-        if show_progressbar:
-            widgets = [method.__name__.lstrip('_'), ': ',  progressbar.Percentage(), ' ', progressbar.Bar(marker='#'),
-                       ' ', progressbar.ETA()]
-            bar = progressbar.ProgressBar(widgets=widgets, max_value=len(self)).start()
-        else:
-            bar = None
+        @wraps(method)
+        @return_new_instance
+        def wrapper(self, *args, **kwargs):
 
-        # Begin iteration over geometries
-        for idx, geometry in enumerate(self.geometry):
-            new_geometry = method(self, geometry, *args, **kwargs)  # Call method here
-            if new_geometry:
-                multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geometry), ignore_index=True)
-                multdf.geometry = new_geometry
-                outdf = outdf.append(multdf, ignore_index=True)
-            else:
-                append_bool[idx] = True
-
+            # Display progress bar in console if necessary
+            try:
+                show_progressbar = kwargs["show_progressbar"]
+            except KeyError:
+                show_progressbar = False
             if show_progressbar:
-                bar.update(idx)
+                widgets = [method.__name__.lstrip('_'), ': ',  progressbar.Percentage(), ' ',
+                           progressbar.Bar(marker='#'), ' ', progressbar.ETA()]
+                bar = progressbar.ProgressBar(widgets=widgets, max_value=len(self)).start()
+            else:
+                bar = None
 
-        if show_progressbar:
-            bar.finish()
+            # Begin iteration over geometries
+            if replace_by_single:
+                new_geometry = []
+                for idx, geometry in enumerate(self.geometry):
+                    new_geometry.append(method(self, geometry, *args, **kwargs))  # Call method here
 
-        return outdf.append(self._gpd_df[append_bool], ignore_index=True)
-    return wrapper
+                    if show_progressbar:
+                        bar.update(idx)
+
+                if show_progressbar:
+                    bar.finish()
+
+                return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
+
+            else:
+                outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
+                append_bool = np.full(len(self), False)
+
+                for idx, geometry in enumerate(self.geometry):
+                    new_geometry = method(self, geometry, *args, **kwargs)  # Call method here
+                    if new_geometry:
+                        multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geometry),
+                                                           ignore_index=True)
+                        multdf.geometry = new_geometry
+                        outdf = outdf.append(multdf, ignore_index=True)
+                    else:
+                        append_bool[idx] = True
+
+                    if show_progressbar:
+                        bar.update(idx)
+
+                if show_progressbar:
+                    bar.finish()
+
+                return outdf.append(self._gpd_df[append_bool], ignore_index=True)
+
+        return wrapper
+    return decorate
 
 
 class GeoLayer:
@@ -204,12 +229,12 @@ class GeoLayer:
         self._line_layer_class = LineLayer  # Line layer class/subclass corresponding to given layer class/subclass
         self.name = name
 
-    @iterate_over_geometry
+    @iterate_over_geometry()
     def _explode(self, geometry):
         if type(geometry) == self._multi_geometry_class:
             return list(geometry)
 
-    @iterate_over_geometry
+    @iterate_over_geometry()
     def _split(self, geometry, threshold, method, no_multipart, show_progressbar):
         if geometry.__getattribute__(self._split_threshold) > threshold:
             split_geom = self._split_methods[method](geometry, threshold)
@@ -1024,7 +1049,7 @@ class PolygonLayer(GeoLayer):
         if self._geom_type != 'Polygon':
             raise PolygonLayerError("Geometry must be 'Polygon' but is '{}'".format(self._geom_type))
 
-    @iterate_over_geometry
+    @iterate_over_geometry()
     def _partition(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
                    show_progressbar, **metis_options):
         if geometry.area > threshold:
@@ -1301,6 +1326,13 @@ class LineLayer(GeoLayer):
         # Check geometry
         if self._geom_type != 'Line':
             raise LineLayerError("Geometry of LineLayer must be 'Line' but is '{}'".format(self._geom_type))
+
+    @iterate_over_geometry(replace_by_single=True)
+    def _douglas_peucker(self, geometry, tolerance, show_progressbar):
+        return LineString(rdp(np.array(geometry.coords), epsilon=tolerance))
+
+    def douglas_peucker1(self, tolerance=0, show_progressbar=False):
+        return self._douglas_peucker(tolerance, show_progressbar=show_progressbar)
 
     @return_new_instance
     def douglas_peucker(self, tolerance=0):
@@ -1592,6 +1624,10 @@ def _union(layer1, layer2):
 if __name__ == "__main__":
     from utils.sys.timer import Timer
     test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
+    with Timer() as t1:
+        g1 = test.douglas_peucker()
     with Timer() as t2:
-        g2 = test.douglas_peucker(show_progressbar=False)
-    print("dp1: %s" % t2)
+        g2 = test.douglas_peucker1(show_progressbar=True)
+    print("dp1: %s, dp2: %s" % (t1, t2))
+    print(g1)
+    print(g2)
