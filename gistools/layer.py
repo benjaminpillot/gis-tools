@@ -1331,21 +1331,27 @@ class LineLayer(GeoLayer):
     def _douglas_peucker(self, geometry, tolerance, show_progressbar):
         return LineString(rdp(np.array(geometry.coords), epsilon=tolerance))
 
-    def douglas_peucker1(self, tolerance=0, show_progressbar=False):
-        return self._douglas_peucker(tolerance, show_progressbar=show_progressbar)
-
-    @return_new_instance
-    def douglas_peucker(self, tolerance=0):
+    def douglas_peucker(self, tolerance=0, show_progressbar=False):
         """ Apply the Douglas-Peucker algorithm to line geometries
 
-        :param tolerance: tolerance of accuracy in line generalization algorithm
+        :param tolerance: tolerance or accuracy in line generalization algorithm
+        :param show_progressbar: either show progressbar or not
         :return: LineLayer instance
         """
-        new_geometry = []
-        for geom in self.geometry:
-            new_geometry.append(LineString(rdp(np.array(geom.coords), epsilon=tolerance)))
+        return self._douglas_peucker(tolerance, show_progressbar=show_progressbar)
 
-        return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
+    # @return_new_instance
+    # def douglas_peucker(self, tolerance=0):
+    #     """ Apply the Douglas-Peucker algorithm to line geometries
+    #
+    #     :param tolerance: tolerance of accuracy in line generalization algorithm
+    #     :return: LineLayer instance
+    #     """
+    #     new_geometry = []
+    #     for geom in self.geometry:
+    #         new_geometry.append(LineString(rdp(np.array(geom.coords), epsilon=tolerance)))
+    #
+    #     return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
 
     @return_new_instance
     def linemerge(self, by, method="dissolve"):
