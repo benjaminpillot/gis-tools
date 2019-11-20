@@ -104,3 +104,7 @@ class ImportMetisWarning(Warning):
 
 class SpatialDatabaseWarning(Warning):
     pass
+
+
+class QlQueryError(Exception):
+    pass
