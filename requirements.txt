@@ -2,6 +2,7 @@ cpc.geogrids==0.2.3
 elevation>=1.0.5
 fiona>=1.7.13
 gdal>=2.2.4
+geojson>=2.5.0
 geopandas>=0.4.0
 greece-utils>=0.1.0
 matplotlib>=3.0.3
