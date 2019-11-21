@@ -5,11 +5,11 @@
 More detailed description.
 """
 import geojson
-import requests
-import ogr
 from gistools.exceptions import QlQueryError
-from osmxtract import overpass
-from shapely.geometry import shape
+from gistools.geometry import merge
+from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
+from osmnx.settings import default_crs
+from shapely.geometry import LineString, MultiPolygon, Polygon
 from utils.check import check_string
 
 __author__ = 'Benjamin Pillot'
@@ -28,7 +28,7 @@ def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeo
     :param timeout:
     :return:
     """
-    gdf_geometry = ox.gdf_from_place(place)
+    gdf_geometry = gdf_from_place(place)
 
     try:
         geometry = gdf_geometry.geometry[0]
@@ -38,22 +38,69 @@ def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeo
     responses = []
 
     if by_poly:
-        polygon_coord_strs = ox.get_polygons_coordinates(test.geometry[0])
+        polygon_coord_strs = get_polygons_coordinates(geometry)
         for poly_coord_str in polygon_coord_strs:
             query = ql_query(osm_type, tag, values, polygon_coord=poly_coord_str, timeout=timeout)
-            responses.append(ox.overpass_request(data={'data': query}, timeout=180))
+            responses.append(overpass_request(data={'data': query}, timeout=180))
     else:
         query = ql_query(osm_type, tag, values, bounds=geometry.bounds, timeout=timeout)
-        responses.append(ox.overpass_request(data={'data': query}, timeout=180))
+        responses.append(overpass_request(data={'data': query}, timeout=180))
 
     return responses
 
 
-def osm_to_geodataframe():
-    """
+def extract_multipolygon_features(json):
+    """ Read json response and extract multipolygon geometries
 
+    :param json: json response from overpass API
+    :return: GeoJSON FeatureCollection
+    """
+    features = []
+    elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] == 'multipolygon']
+    for elem in elements:
+        collection = []
+        for member in elem['members']:
+            member_coords = []
+            for node in member['geometry']:
+                member_coords.append([node['lon'], node['lat']])
+            collection.append(LineString(member_coords))
+        geom_collection = merge(collection)
+
+        if len(geom_collection) > 1:
+            geom = MultiPolygon([Polygon(line) for line in geom_collection])
+        else:
+            geom = Polygon(geom_collection[0])
+
+        if 'id' not in elem['tags'].keys():
+            tags = dict(osm_id=elem['id'], **elem['tags'])
+        else:
+            tags = elem['tags']
+
+        # Add osm type to attributes
+        tags.update(osm_type=elem['type'])
+
+        features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=tags))
+
+    return geojson.FeatureCollection(features)
+
+
+def json_to_geodataframe(response, geometry_type):
+    """ Convert JSON responses to
+
+    :param response: json response
+    :param geometry_type: type of geometry to extract ('point', 'linestring', 'polygon', 'multipolygon')
     :return:
     """
+    geometry_type = check_string(geometry_type, ('point', 'linestring', 'polygon', 'multipolygon'))
+
+    if geometry_type == 'point':
+        pass
+    elif geometry_type == 'linestring':
+        pass
+    elif geometry_type == 'polygon':
+        pass
+    elif geometry_type == 'multipolygon':
+        return gpd.GeoDataFrame.from_features(extract_multipolygon_features(response), crs=default_crs)
 
 
 def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeout=180):
@@ -94,24 +141,28 @@ def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeou
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
     import geopandas as gpd
-    import osmnx as ox
     # test = ox.graph_from_place('Piedmont, California, USA', network_type='walk')
-    place = 'Sao Sebastiao, Distrito Federal, Brasil'
-    test = ox.gdf_from_place(place)
-    polygon_coord_strs = ox.get_polygons_coordinates(test.geometry[0])
-    response_jsons = []
-    for poly_coord_str in polygon_coord_strs:
-        # query = ql_query(test.geometry[0].bounds, "place", values=["city_block"])
-        query_template = '[out:json][timeout:180]; rel["place"="city_block"](poly:"{polygon}");out geom;'
-        query = query_template.format(polygon=poly_coord_str)
-        # query = '[out:json][timeout:180];area[name="{}"]->.' \
-        #         'londonarea; rel[place="city_block"](pivot.londonarea);out geom;'.format(place)
-        # response = overpass.request(query)
-        response = ox.overpass_request(data={'data': query}, timeout=180)
-        # response2 = requests.get('http://overpass-api.de/api/interpreter', params={'data': query})
+    jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'relation', 'place', 'city_block')
+    gdf = json_to_geodataframe(jsons[0], 'multipolygon')
+    gdf.to_file('test.shp')
 
-        feature_collection = overpass.as_geojson(response, 'multipolygons')
-        gdf = gpd.GeoDataFrame.from_features(feature_collection)
+
+    # test = ox.gdf_from_place(place)
+    # polygon_coord_strs = ox.get_polygons_coordinates(test.geometry[0])
+    # response_jsons = []
+    # for poly_coord_str in polygon_coord_strs:
+    #     # query = ql_query(test.geometry[0].bounds, "place", values=["city_block"])
+    #     query_template = '[out:json][timeout:180]; rel["place"="city_block"](poly:"{polygon}");out geom;'
+    #     query = query_template.format(polygon=poly_coord_str)
+    #     # query = '[out:json][timeout:180];area[name="{}"]->.' \
+    #     #         'londonarea; rel[place="city_block"](pivot.londonarea);out geom;'.format(place)
+    #     # response = overpass.request(query)
+    #     response = ox.overpass_request(data={'data': query}, timeout=180)
+    #     # response2 = requests.get('http://overpass-api.de/api/interpreter', params={'data': query})
+    #
+    #     feature_collection = overpass.as_geojson(response, 'multipolygons')
+    #     gdf = gpd.GeoDataFrame.from_features(feature_collection)
 
     gdf.plot()
     plt.show()
+    print(gdf.columns)
