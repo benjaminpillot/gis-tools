@@ -3,18 +3,96 @@
 """ OpenStreetMap related tools
 
 More detailed description.
+(thanks to https://github.com/yannforget/OSMxtract for inspiration !)
 """
 import geojson
 from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
 from osmnx.settings import default_crs
-from shapely.geometry import LineString, MultiPolygon, Polygon
+from shapely.geometry import LineString, MultiPolygon, Polygon, Point
 from utils.check import check_string
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
+
+
+def _to_linestring_features(json):
+    """
+
+    :param json:
+    :return:
+    """
+    pass
+
+
+def _to_multipolygon_features(json):
+    """ Read json response and extract multipolygon features (geometry + attributes)
+
+    :param json: JSON response from overpass API
+    :return: GeoJSON FeatureCollection
+    """
+    features = []
+    elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] == 'multipolygon']
+    for elem in elements:
+        collection = []
+        for member in elem['members']:
+            member_coords = []
+            for node in member['geometry']:
+                member_coords.append([node['lon'], node['lat']])
+            collection.append(LineString(member_coords))
+        geom_collection = merge(collection)
+
+        if len(geom_collection) > 1:
+            geom = MultiPolygon([Polygon(line) for line in geom_collection])
+        else:
+            geom = Polygon(geom_collection[0])
+
+        features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
+
+    return geojson.FeatureCollection(features)
+
+
+def _to_point_features(json):
+    """ Read json response and extract point geometries
+
+    :param json: JSON response from overpass API
+    :return: GeoJSON FeatureCollection
+    """
+    features = []
+    elements = [e for e in json['elements'] if e.get('type') == 'node']
+    for elem in elements:
+        coords = [elem['lon'], elem['lat']]
+        features.append(geojson.Feature(id=elem['id'], geometry=Point(coords), properties=_feature_tags(elem)))
+
+    return geojson.FeatureCollection(features)
+
+
+def _to_polygon_features(json):
+    """
+
+    :param json:
+    :return:
+    """
+    pass
+
+
+def _feature_tags(json_element):
+    """ Update feature tags to set OSM ID and type
+
+    :param json_element: 'elements' feature in JSON dict response
+    :return:
+    """
+    if 'id' not in json_element['tags'].keys():
+        tags = dict(osm_id=json_element['id'], **json_element['tags'])
+    else:
+        tags = json_element['tags']
+
+    # Add osm type to attributes
+    tags.update(osm_type=json_element['type'])
+
+    return tags
 
 
 def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeout=180):
@@ -49,41 +127,6 @@ def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeo
     return responses
 
 
-def extract_multipolygon_features(json):
-    """ Read json response and extract multipolygon geometries
-
-    :param json: json response from overpass API
-    :return: GeoJSON FeatureCollection
-    """
-    features = []
-    elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] == 'multipolygon']
-    for elem in elements:
-        collection = []
-        for member in elem['members']:
-            member_coords = []
-            for node in member['geometry']:
-                member_coords.append([node['lon'], node['lat']])
-            collection.append(LineString(member_coords))
-        geom_collection = merge(collection)
-
-        if len(geom_collection) > 1:
-            geom = MultiPolygon([Polygon(line) for line in geom_collection])
-        else:
-            geom = Polygon(geom_collection[0])
-
-        if 'id' not in elem['tags'].keys():
-            tags = dict(osm_id=elem['id'], **elem['tags'])
-        else:
-            tags = elem['tags']
-
-        # Add osm type to attributes
-        tags.update(osm_type=elem['type'])
-
-        features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=tags))
-
-    return geojson.FeatureCollection(features)
-
-
 def json_to_geodataframe(response, geometry_type):
     """ Convert JSON responses to
 
@@ -94,17 +137,17 @@ def json_to_geodataframe(response, geometry_type):
     geometry_type = check_string(geometry_type, ('point', 'linestring', 'polygon', 'multipolygon'))
 
     if geometry_type == 'point':
-        pass
+        return gpd.GeoDataFrame.from_features(_to_point_features(response), crs=default_crs)
     elif geometry_type == 'linestring':
-        pass
+        return gpd.GeoDataFrame.from_features(_to_linestring_features(response), crs=default_crs)
     elif geometry_type == 'polygon':
-        pass
+        return gpd.GeoDataFrame.from_features(_to_polygon_features(response), crs=default_crs)
     elif geometry_type == 'multipolygon':
-        return gpd.GeoDataFrame.from_features(extract_multipolygon_features(response), crs=default_crs)
+        return gpd.GeoDataFrame.from_features(_to_multipolygon_features(response), crs=default_crs)
 
 
 def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeout=180):
-    """ QL query (thantks to https://github.com/yannforget/OSMxtract for inspiration !)
+    """ QL query (thanks to https://github.com/yannforget/OSMxtract for inspiration !)
 
     :param osm_type: OSM geometry type str {'node', 'way', 'relation'}
     :param tag: OSM tag to query
