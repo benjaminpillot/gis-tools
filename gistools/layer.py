@@ -5,44 +5,42 @@
 Toolset for working with static geo layer elements (networks, buffers, areas such as administrative boundaries,
 road/electrical networks, waterways, restricted areas, etc.)
 """
+import copy
 import math
 import os
 import random
-
-import fiona
 import warnings
-
-import progressbar
-import pyproj
 from copy import copy
 from functools import wraps
+
+import fiona
 import geopandas as gpd
 import numpy as np
-import copy
-
-from numba import jit, float64, int64
-from rdp import rdp
-from shapely import wkb
-from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
+import progressbar
+import pyproj
 from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
-from pandas import concat
-from shapely.ops import cascaded_union
-from shapely.prepared import prep
-from utils.toolset import split_list_by_index
-from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
-from utils.check.value import check_sub_collection_in_collection
-
-from gistools.distance import compute_distance
 from gistools.conversion import geopandas_to_array
 from gistools.coordinates import GeoGrid, r_tree_idx
+from gistools.distance import compute_distance
 from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, \
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
     area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana
+from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
+from numba import jit, float64, int64
+from pandas import concat
+from rdp import rdp
+from shapely import wkb
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
+from shapely.ops import cascaded_union
+from shapely.prepared import prep
+from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
+from utils.check.value import check_sub_collection_in_collection
+from utils.toolset import split_list_by_index
 
 # __all__ = []
 # __version__ = '0.1'
@@ -1030,20 +1028,35 @@ class GeoLayer:
         return layer
 
     @classmethod
-    def from_osm(cls, place, osm_type, tag, values=None, by_poly=True, timeout=180):
+    def from_osm(cls, place, tag, values=None, by_poly=True, timeout=180):
         """ Build layer from OpenStreetMap query
 
-        :param place: single place name query (e.g.: "London")
-        :param osm_type: 'node', 'way' or 'relation'
-        :param tag:
-        :param values:
-        :param by_poly:
+        :param place: single place name query (e.g.: "London", "Paris", etc.)
+        :param tag: OSM tag
+        :param values: values corresponding to OSM tag
+        :param by_poly: if True, search within place's corresponding polygon, otherwise use bounds
         :param timeout:
         :return:
         """
+        if cls._geometry_class == Point:
+            osm_type = 'node'
+        elif cls._geometry_class == LineString:
+            osm_type = 'way'
+        else:
+            osm_type = 'relation'
+
+        if cls._geometry_class == Polygon:
+            geometry_type = 'multipolygon'
+        else:
+            geometry_type = cls._geometry_class.__name__
+
+        list_of_gdf = []
         jsons = download_osm_features(place, osm_type, tag, values, by_poly, timeout)
         for json in jsons:
-            gdf = json_to_geodataframe(json, cls._geometry_class)
+            list_of_gdf.append(json_to_geodataframe(json, geometry_type))
+
+        return cls(gpd.GeoDataFrame(concat(list_of_gdf, ignore_index=True), crs=list_of_gdf[0].crs), name=tag)
+
         # TODO: implement method
 
 
