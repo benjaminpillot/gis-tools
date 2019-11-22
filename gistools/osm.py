@@ -2,8 +2,9 @@
 
 """ OpenStreetMap related tools
 
-More detailed description.
-(thanks to https://github.com/yannforget/OSMxtract for inspiration !)
+Among available tools:
+- Use Overpass API to query OSM database and convert JSON
+response to geopandas dataframe (thanks to https://github.com/yannforget/OSMxtract for inspiration !)
 """
 import geojson
 from gistools.exceptions import QlQueryError
@@ -98,7 +99,7 @@ def _feature_tags(json_element):
 def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeout=180):
     """ Download OSM features within given place
 
-    :param place: location geocoding string
+    :param place: single place name query (e.g: "London", "Bonn", etc.)
     :param osm_type: OSM geometry type str ('node', 'way', 'relation')
     :param tag: OSM tag to query
     :param values: str/list of possible values for the provided OSM tag
@@ -188,7 +189,6 @@ if __name__ == "__main__":
     jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'relation', 'place', 'city_block')
     gdf = json_to_geodataframe(jsons[0], 'multipolygon')
     gdf.to_file('test.shp')
-
 
     # test = ox.gdf_from_place(place)
     # polygon_coord_strs = ox.get_polygons_coordinates(test.geometry[0])

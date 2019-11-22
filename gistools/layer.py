@@ -1029,6 +1029,23 @@ class GeoLayer:
 
         return layer
 
+    @classmethod
+    def from_osm(cls, place, osm_type, tag, values=None, by_poly=True, timeout=180):
+        """ Build layer from OpenStreetMap query
+
+        :param place: single place name query (e.g.: "London")
+        :param osm_type: 'node', 'way' or 'relation'
+        :param tag:
+        :param values:
+        :param by_poly:
+        :param timeout:
+        :return:
+        """
+        jsons = download_osm_features(place, osm_type, tag, values, by_poly, timeout)
+        for json in jsons:
+            gdf = json_to_geodataframe(json, cls._geometry_class)
+        # TODO: implement method
+
 
 class PolygonLayer(GeoLayer):
     """ Polygon layer instance
