@@ -7,6 +7,7 @@ Among available tools:
 response to geopandas dataframe (thanks to https://github.com/yannforget/OSMxtract for inspiration !)
 """
 import geojson
+import geopandas as gpd
 from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
@@ -20,12 +21,19 @@ __email__ = 'benjaminpillot@riseup.net'
 
 
 def _to_linestring_features(json):
-    """
+    """ Read JSON response and extract linestring features
 
-    :param json:
+    :param json: JSON response from overpass API
     :return:
     """
-    pass
+    features = []
+    elements = [e for e in json['elements'] if e.get('type') == 'way']
+    for elem in elements:
+        coords = [[node['lon'], node['lat']] for node in elem['geometry']]
+        geom = LineString(coords)
+        features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
+
+    return geojson.FeatureCollection(features)
 
 
 def _to_multipolygon_features(json):
@@ -184,10 +192,9 @@ def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeou
 
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
-    import geopandas as gpd
     # test = ox.graph_from_place('Piedmont, California, USA', network_type='walk')
     jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'relation', 'place', 'city_block')
-    gdf = json_to_geodataframe(jsons[0], 'multipolygon')
+    gdf = json_to_geodataframe(jsons[0], 'linestring')
     gdf.to_file('test.shp')
 
     # test = ox.gdf_from_place(place)
