@@ -876,7 +876,10 @@ class GeoLayer:
 
     def attributes(self):
 
-        return self._gpd_df.keys()
+        # TODO: return only attributes (no geometry)
+        columns = [col for col in self._gpd_df.keys() if col != 'geometry']
+        return columns
+        # return self._gpd_df.keys()
 
     def plot(self, *args, **kwargs):
 
@@ -1227,6 +1230,20 @@ class PolygonLayer(GeoLayer):
         # Return intersecting matrix
         return np.array([shared_area_among_collection(geom, other.geometry, normalized, other.r_tree_idx) for geom in
                          self.geometry])
+
+    @return_new_instance
+    def overlay(self, other, how, method="geopandas"):
+        """
+
+        :param other:
+        :param how:
+        :param method: "geopandas" or "internal"
+        :return:
+        """
+        if method == "geopandas":
+            return gpd.overlay(self._gpd_df, other._gpd_df, how=how)
+        else:
+            return super().overlay(other, how)
 
     def partition(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
                   split_method="hexana", show_progressbar=False, **metis_options):
@@ -1595,7 +1612,7 @@ def _intersection(layer1, layer2):
     :return:
     """
     new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+    outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
     for i, geometry in enumerate(layer1.geometry):
         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
         if any(is_intersecting):
@@ -1658,12 +1675,28 @@ def _union(layer1, layer2):
 
 
 if __name__ == "__main__":
-    from utils.sys.timer import Timer
-    test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
-    with Timer() as t1:
-        g1 = test.douglas_peucker()
-    with Timer() as t2:
-        g2 = test.douglas_peucker1(show_progressbar=True)
-    print("dp1: %s, dp2: %s" % (t1, t2))
-    print(g1)
-    print(g2)
+    from matplotlib import pyplot as plt
+    wpda = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Protected "
+                        "areas/WDPA_Apr2018_GUF-shapefile-polygons.shp")
+    commune = PolygonLayer("/home/benjamin/Documents/Data/Geo "
+                           "layers/BD_PARCELLAIRE/BDPARCELLAIRE/1_DONNEES_LIVRAISON_2017-07-00270/BDPV_1"
+                           "-2_SHP_UTM22RGFG95_D973/COMMUNE.SHP").to_crs(wpda.crs)
+    union = commune.overlay(wpda, how="intersection")
+    plt.figure(1)
+    wpda.plot()
+    commune.plot()
+    plt.show()
+
+    plt.figure(2)
+    union.plot()
+    plt.show()
+
+    # from utils.sys.timer import Timer
+    # test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
+    # with Timer() as t1:
+    #     g1 = test.douglas_peucker()
+    # with Timer() as t2:
+    #     g2 = test.douglas_peucker1(show_progressbar=True)
+    # print("dp1: %s, dp2: %s" % (t1, t2))
+    # print(g1)
+    # print(g2)
