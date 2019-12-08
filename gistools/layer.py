@@ -691,10 +691,12 @@ class GeoLayer:
             return _intersection(self, other)
         elif how == "difference":
             return _difference(self, other)
-        elif how == "union":
-            return _union(self, other)
-        else:  # symmetric_difference
-            return _symmetric_difference(self, other)
+        else:
+            raise GeoLayerError("'%s' is not a valid overlay method" % how)
+        # elif how == "union":
+        #     return _union(self, other)
+        # else:  # symmetric_difference
+        #     return _symmetric_difference(self, other)
 
     def pairwise_distance(self, other):
         """ Compute distance between all elements from two GeoLayers
@@ -1232,18 +1234,14 @@ class PolygonLayer(GeoLayer):
                          self.geometry])
 
     @return_new_instance
-    def overlay(self, other, how, method="geopandas"):
-        """
+    def overlay(self, other, how):
+        """ Use geopandas overlay method for polygons
 
         :param other:
         :param how:
-        :param method: "geopandas" or "internal"
         :return:
         """
-        if method == "geopandas":
-            return gpd.overlay(self._gpd_df, other._gpd_df, how=how)
-        else:
-            return super().overlay(other, how)
+        return gpd.overlay(self._gpd_df, other._gpd_df, how=how)
 
     def partition(self, threshold, disaggregation_factor=16, precision=100, recursive=False,
                   split_method="hexana", show_progressbar=False, **metis_options):
@@ -1616,80 +1614,91 @@ def _intersection(layer1, layer2):
     for i, geometry in enumerate(layer1.geometry):
         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
         if any(is_intersecting):
-            new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
-                is_intersecting]]))])
+            new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
+            # new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
+            #     is_intersecting]]))])
             other_layer = layer2[is_intersecting]
             df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+            outdf = outdf.append(concat([df.drop("geometry", axis=1), other_layer._gpd_df.drop("geometry", axis=1)],
+                                        axis=1), ignore_index=True)
 
     outdf.geometry = new_geometry
     return outdf
 
 
-def _symmetric_difference(layer1, layer2):
-    """
+# def _symmetric_difference(layer1, layer2):
+#     """
+#
+#     :param layer1:
+#     :param layer2:
+#     :return:
+#     """
+#     new_geometry = []
+#     outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+#     for i, geometry in enumerate(layer1.geometry):
+#         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+#         if any(is_intersecting):
+#             new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
+#                 is_intersecting]]))])
+#             other_layer = layer2[is_intersecting]
+#             df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+#             outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+#
+#     outdf.geometry = new_geometry
+#     return outdf
 
-    :param layer1:
-    :param layer2:
-    :return:
-    """
-    new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
-    for i, geometry in enumerate(layer1.geometry):
-        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-        if any(is_intersecting):
-            new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
-                is_intersecting]]))])
-            other_layer = layer2[is_intersecting]
-            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
 
-    outdf.geometry = new_geometry
-    return outdf
-
-
-def _union(layer1, layer2):
-    """ Union of 2 layers
-
-    :param layer1:
-    :param layer2:
-    :return:
-    """
-    new_geom = []
-    outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
-    for i, geometry in enumerate(layer1.geometry):
-        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-        if any(is_intersecting):
-            new_geom.extend([cascaded_union([geometry] + [geom for geom in layer2.geometry[is_intersecting]])])
-            other_layer = layer2[is_intersecting]
-            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-            outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
-        else:
-            new_geom.append(geometry)
-            df = gpd.GeoDataFrame().append(layer1._gpd_df.iloc[i], ignore_index=True)
-            # TODO
-
-    # outdf = outdf.drop(columns=["geometry"])
-    outdf.geometry = new_geom
-    return outdf
+# def _union(layer1, layer2):
+#     """ Union of 2 layers
+#
+#     :param layer1:
+#     :param layer2:
+#     :return:
+#     """
+#     if layer1.__class__ != layer2.__class__:
+#         raise GeoLayerError("Union can only be performed on same layer type but layer 1 is '%s' and layer 2 is '%s'" % (
+#             layer1.__class__.__name__, layer2.__class__.__name__))
+#     new_geom = []
+#     outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
+#     for i, geometry in enumerate(layer1.geometry):
+#         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+#         if any(is_intersecting):
+#             new_geom.extend([cascaded_union([geometry] + [geom for geom in layer2.geometry[is_intersecting]])])
+#             other_layer = layer2[is_intersecting]
+#             df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+#             outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
+#         else:
+#             new_geom.append(geometry)
+#             df = gpd.GeoDataFrame().append(layer1._gpd_df.iloc[i], ignore_index=True)
+#             # TODO
+#
+#     # outdf = outdf.drop(columns=["geometry"])
+#     outdf.geometry = new_geom
+#     return outdf
 
 
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
+    from utils.sys.timer import Timer
+    roads = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
     wpda = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Protected "
-                        "areas/WDPA_Apr2018_GUF-shapefile-polygons.shp")
+                        "areas/WDPA_Apr2018_GUF-shapefile-polygons.shp").to_crs(roads.crs)
     commune = PolygonLayer("/home/benjamin/Documents/Data/Geo "
                            "layers/BD_PARCELLAIRE/BDPARCELLAIRE/1_DONNEES_LIVRAISON_2017-07-00270/BDPV_1"
-                           "-2_SHP_UTM22RGFG95_D973/COMMUNE.SHP").to_crs(wpda.crs)
-    union = commune.overlay(wpda, how="intersection")
-    plt.figure(1)
-    wpda.plot()
-    commune.plot()
-    plt.show()
+                           "-2_SHP_UTM22RGFG95_D973/COMMUNE.SHP").to_crs(roads.crs)
+    with Timer() as t:
+        # union = roads.overlay(commune, how="intersection")
+        difference = roads.overlay(wpda, how="union")
+    print("spent time: %s" % t)
+    difference.to_file("/home/benjamin/Documents/Data/Geo layers/Road network/roads_overlay.shp")
+    # plt.figure(1)
+    # wpda.plot()
+    # commune.plot()
+    # plt.show()
 
-    plt.figure(2)
-    union.plot()
-    plt.show()
+    # plt.figure(2)
+    # union.plot()
+    # plt.show()
 
     # from utils.sys.timer import Timer
     # test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
