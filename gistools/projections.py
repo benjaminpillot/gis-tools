@@ -9,8 +9,6 @@ More detailed description.
 
 # __all__ = []
 # __version__ = '0.1'
-import fiona.crs
-
 import pyproj
 
 from osgeo import gdal, osr, ogr
@@ -78,7 +76,7 @@ def proj4_from(proj):
     """
     if type(proj) == int:
         try:
-            proj4_str = pyproj.Proj(fiona.crs.from_epsg(proj)).srs
+            proj4_str = pyproj.Proj('epsg:%d' % proj).srs
         except (ValueError, RuntimeError):
             raise ValueError("Invalid EPSG code")
     elif type(proj) == str or type(proj) == dict:
