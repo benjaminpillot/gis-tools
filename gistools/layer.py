@@ -1063,14 +1063,14 @@ class GeoLayer:
     def pyproj(self):
         # Update 12/10/2019: due to "FutureWarning" in pyproj library, use crs['init'] so that CRS initialization
         # method is '<authority>:<code>'
-        if isinstance(self._gpd_df.crs, dict):
-            crs = self._gpd_df.crs['init']
-        elif isinstance(self._gpd_df.crs, str):
-            crs = self._gpd_df.crs.replace("+init=", "")
-        else:
-            crs = self._gpd_df.crs
+        # if isinstance(self._gpd_df.crs, dict):
+        #     crs = self._gpd_df.crs['init']
+        # elif isinstance(self._gpd_df.crs, str):
+        #     crs = self._gpd_df.crs.replace("+init=", "")
+        # else:
+        #     crs = self._gpd_df.crs
 
-        return pyproj.Proj(crs)
+        return pyproj.Proj(self._gpd_df.crs)
 
     # Rtree property: lazy property (only computed once when accessed for the first time)
     @lazyproperty
