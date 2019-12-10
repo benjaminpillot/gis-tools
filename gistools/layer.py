@@ -10,7 +10,6 @@ import math
 import os
 import random
 import warnings
-from copy import copy
 from functools import wraps
 
 import fiona
@@ -27,12 +26,12 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana
+    area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana, nearest_feature
 from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
 from numba import jit, float64, int64
-from pandas import concat
+from pandas import concat, Series
 from rdp import rdp
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
@@ -48,6 +47,77 @@ from utils.toolset import split_list_by_index
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
+
+
+def _difference(layer1, layer2):
+    """ Difference between 2 layers
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geometry = []
+    outdf = gpd.GeoDataFrame(columns=layer1.attributes(), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            diff_result = explode([geometry.difference(cascaded_union([geom for geom in layer2.geometry[
+                is_intersecting]]))])
+            new_geometry.extend(diff_result)
+            if len(diff_result) > 0:
+                outdf = outdf.append([layer1._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
+        else:
+            new_geometry.append(geometry)
+            outdf = outdf.append(layer1._gpd_df.iloc[i], ignore_index=True)
+
+    outdf.geometry = new_geometry
+    return outdf
+
+
+def _intersection(layer1, layer2):
+    """ Intersection between 2 layers
+
+    :param layer1:
+    :param layer2:
+    :return:
+    """
+    new_geometry = []
+    outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
+            # new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
+            #     is_intersecting]]))])
+            other_layer = layer2[is_intersecting]
+            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
+            outdf = outdf.append(concat([df.drop("geometry", axis=1), other_layer._gpd_df.drop("geometry", axis=1)],
+                                        axis=1), ignore_index=True)
+
+    outdf.geometry = new_geometry
+    return outdf
+
+
+def cascaded_intersection(list_of_layers):
+    """ Return intersection of multiple layers
+
+    First layer in list shall give the dimension of the result
+    :param list_of_layers: list of layers ranked by dimension order (point, line, polygon)
+    :return:
+    """
+    if len(list_of_layers) <= 1:
+        return list_of_layers[0].copy()
+
+    intersection = list_of_layers[0]
+    level = 1
+
+    while "there is a layer to intersect":
+        intersection = intersection.overlay(list_of_layers[level], how='intersection')
+
+        if level < len(list_of_layers) - 1:
+            level += 1
+        else:
+            return intersection
 
 
 def check_proj(*crs, warning=True):
@@ -163,7 +233,6 @@ class GeoLayer:
     geo file or geopandas datasets)
     """
 
-    # gpd_df = protected_property('gpd_df')
     geom_type = protected_property('geom_type')
 
     _split_methods = None
@@ -172,28 +241,28 @@ class GeoLayer:
     _geometry_class = None
     _multi_geometry_class = None
 
-    def __init__(self, layer_to_set, name: str = 'layer'):
+    def __init__(self, layer, name: str = 'layer'):
         """ GeoLayer constructor
 
-        :param layer_to_set: geo file (geojson/shape) or geopandas data frame
+        :param layer: geo file (geojson/shape) or geopandas data frame
         """
 
         try:
-            check_type(layer_to_set, (str, gpd.GeoDataFrame), name, str)
+            check_type(layer, (str, gpd.GeoDataFrame), name, str)
         except TypeError as e:
             raise GeoLayerError("%s" % e)
 
-        if type(layer_to_set) == str:
+        if type(layer) == str:
             try:
-                self._file = layer_to_set
-                gpd_df = gpd.read_file(layer_to_set)
+                self._file = layer
+                gpd_df = gpd.read_file(layer)
             except (OSError, FionaValueError) as e:
-                raise GeoLayerError("Impossible to load file {}:\n{}".format(layer_to_set, e))
+                raise GeoLayerError("Impossible to load file {}:\n{}".format(layer, e))
             except (AttributeError, ValueError):
                 # Sometimes, only one geometry could be wrong... And GeoPandas read_file method will not succeed
                 # See https://gis.stackexchange.com/questions/277231/geopandas-valueerror-a-linearring-must-have-at
                 # -least-3-coordinate-tuples
-                input_collection = list(fiona.open(layer_to_set, 'r'))
+                input_collection = list(fiona.open(layer, 'r'))
                 output_collection = []
                 for element in input_collection:
                     try:
@@ -201,9 +270,9 @@ class GeoLayer:
                         output_collection.append(element)
                     except (AttributeError, ValueError):
                         pass
-                gpd_df = gpd.GeoDataFrame.from_features(output_collection, proj4_from_layer(layer_to_set))
+                gpd_df = gpd.GeoDataFrame.from_features(output_collection, proj4_from_layer(layer))
         else:
-            gpd_df = gpd.GeoDataFrame().append(layer_to_set, ignore_index=True)
+            gpd_df = gpd.GeoDataFrame().append(layer, ignore_index=True)
 
         if len(gpd_df) == 0:
             raise GeoLayerEmptyError("Empty geo-layer dataset")
@@ -341,7 +410,7 @@ class GeoLayer:
         :return:
         """
 
-        return self._distance_and_nearest_neighbor(other, False)[0]
+        return self._distance_and_nearest_neighbor(other)[0]
 
     def distance_and_nearest_neighbor(self, other):
         """ Get both min distance and nearest neighbor
@@ -350,7 +419,7 @@ class GeoLayer:
         :return:
         """
 
-        return self._distance_and_nearest_neighbor(other, True)
+        return self._distance_and_nearest_neighbor(other)
 
     @return_new_instance
     def drop(self, labels=None, axis=0, index=None, attributes=None):
@@ -455,6 +524,14 @@ class GeoLayer:
 
         return self._point_layer_class(outdf, self.name)
 
+    def hausdorff_distance(self, other):
+        """ Compute hausdorff distance element-wise
+
+        :param other: GeoLayer or GeoSeries/GeoDataFrame instance
+        :return: Series of hausdorff distance
+        """
+        return Series([geom1.hausdorff_distance(geom2) for geom1, geom2 in zip(self.geometry, other.geometry)])
+
     def intersecting_features(self, other):
         """ Which geometry of other layer does intersect ?
 
@@ -534,6 +611,20 @@ class GeoLayer:
             yield self.xy(geometry_id)[0][num], self.xy(geometry_id)[1][num]
             num += 1
 
+    def keep_attributes(self, attr_name):
+        """ Keep only specific attributes in given layer
+
+        :param attr_name: attribute name (str or list of str)
+        :return:
+        """
+        attr_name = [attr_name] if isinstance(attr_name, str) else attr_name
+        drop_attr = [attr for attr in self.attributes() if attr not in attr_name]
+
+        if attr_name:
+            return self.drop_attribute(drop_attr)
+        else:
+            return self.copy()
+
     def length_xy_of_geometry(self, geometry_id):
         """ Compute 2D length of given geometry
 
@@ -606,7 +697,7 @@ class GeoLayer:
         :param other:
         :return:
         """
-        return self._distance_and_nearest_neighbor(other, True)[1]
+        return self._distance_and_nearest_neighbor(other)[1]
 
     def nearest_neighbors(self, other, buffer_distance):
         """ Get nearest neighbors of other layer
@@ -877,6 +968,10 @@ class GeoLayer:
         return self.exterior[n].coords.xy[0], self.exterior[n].coords.xy[1]
 
     def attributes(self):
+        """ Return attributes of geo layer
+
+        :return:
+        """
 
         # TODO: return only attributes (no geometry)
         columns = [col for col in self._gpd_df.keys() if col != 'geometry']
@@ -966,7 +1061,16 @@ class GeoLayer:
 
     @property
     def pyproj(self):
-        return pyproj.Proj(self._gpd_df.crs)
+        # Update 12/10/2019: due to "FutureWarning" in pyproj library, use crs['init'] so that CRS initialization
+        # method is '<authority>:<code>'
+        if isinstance(self._gpd_df.crs, dict):
+            crs = self._gpd_df.crs['init']
+        elif isinstance(self._gpd_df.crs, str):
+            crs = self._gpd_df.crs.replace("+init=", "")
+        else:
+            crs = self._gpd_df.crs
+
+        return pyproj.Proj(crs)
 
     # Rtree property: lazy property (only computed once when accessed for the first time)
     @lazyproperty
@@ -980,41 +1084,42 @@ class GeoLayer:
     ###################
     # Protected methods
 
-    def _distance_and_nearest_neighbor(self, other, compute_nearest_neighbor):
-        """ Get min distance and NN of other layer
+    def _distance_and_nearest_neighbor(self, other):
+        """ Get min distance and nearest neighbor of other layer
 
         :param other: GeoLayer instance
-        :param compute_nearest_neighbor: boolean
         :return:
         """
         check_type(other, GeoLayer)
         check_proj(self.crs, other.crs)
 
-        min_dist = np.zeros(len(self))
+        min_distance = np.zeros(len(self))
         nearest_neighbor = np.zeros(len(self), dtype='int')
 
         for i, geom in enumerate(self.geometry):
-            list_of_nearest_features = list(other.r_tree_idx.nearest(geom.bounds, 1))
-            list_of_intersecting_features = list(other.r_tree_idx.intersection(geom.bounds))
-            is_intersecting = [geom.intersects(other.geometry[f]) for f in list_of_intersecting_features]
-            dist = []
-            if not any(is_intersecting):
-                for f in list_of_nearest_features:
-                    dist.append(geom.distance(other.geometry[f]))
-                min_dist[i] = np.min(dist)
-                if compute_nearest_neighbor:
-                    nearest_feature = int(np.argmin(dist) % len(list_of_nearest_features))
-                    nearest_neighbor[i] = list_of_nearest_features[nearest_feature]
-            else:
-                if compute_nearest_neighbor:
-                    list_of_truly_intersecting_features = [f for i, f in enumerate(list_of_intersecting_features) if
-                                                           is_intersecting[i]]
-                    for f in list_of_truly_intersecting_features:
-                        dist.append(geom.centroid.distance(other.geometry[f].centroid))
-                    nearest_neighbor[i] = list_of_truly_intersecting_features[int(np.argmin(dist) % len(
-                        list_of_truly_intersecting_features))]
+            nearest_neighbor[i], min_distance[i] = nearest_feature(geom, other.geometry, other.r_tree_idx)
 
-        return min_dist, nearest_neighbor
+            # list_of_nearest_features = list(other.r_tree_idx.nearest(geom.bounds, 1))
+            # list_of_intersecting_features = list(other.r_tree_idx.intersection(geom.bounds))
+            # is_intersecting = [geom.intersects(other.geometry[f]) for f in list_of_intersecting_features]
+            # dist = []
+            # if not any(is_intersecting):
+            #     for f in list_of_nearest_features:
+            #         dist.append(geom.distance(other.geometry[f]))
+            #     min_dist[i] = np.min(dist)
+            #     if compute_nearest_neighbor:
+            #         nearest_feature = int(np.argmin(dist) % len(list_of_nearest_features))
+            #         nearest_neighbor[i] = list_of_nearest_features[nearest_feature]
+            # else:
+            #     if compute_nearest_neighbor:
+            #         list_of_truly_intersecting_features = [f for i, f in enumerate(list_of_intersecting_features) if
+            #                                                is_intersecting[i]]
+            #         for f in list_of_truly_intersecting_features:
+            #             dist.append(geom.centroid.distance(other.geometry[f].centroid))
+            #         nearest_neighbor[i] = list_of_truly_intersecting_features[int(np.argmin(dist) % len(
+            #             list_of_truly_intersecting_features))]
+
+        return min_distance, nearest_neighbor
 
     @classmethod
     def from_gpd(cls, *gpd_args, **kwargs):
@@ -1061,8 +1166,6 @@ class GeoLayer:
             list_of_gdf.append(json_to_geodataframe(json, geometry_type))
 
         return cls(gpd.GeoDataFrame(concat(list_of_gdf, ignore_index=True), crs=list_of_gdf[0].crs), name=tag)
-
-        # TODO: implement method
 
 
 class PolygonLayer(GeoLayer):
@@ -1141,6 +1244,16 @@ class PolygonLayer(GeoLayer):
         outdf.geometry = self._gpd_df.convex_hull
 
         return outdf
+
+    def distance_of_centroid_to_boundary(self):
+        """ Return distance (min and max) of centroid to polygon's boundary
+
+        :return: Series of min and max distance
+        """
+        min_distance = self._gpd_df.exterior.distance(self._gpd_df.centroid)
+        max_distance = self.hausdorff_distance(self._gpd_df.centroid)
+
+        return min_distance, max_distance
 
     def extract_overlap(self):
         """ Extract internal overlap polygon geometries
@@ -1577,55 +1690,6 @@ class PointLayer(GeoLayer):
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
 
 
-def _difference(layer1, layer2):
-    """ Difference between 2 layers
-
-    :param layer1:
-    :param layer2:
-    :return:
-    """
-    new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=layer1.attributes(), crs=layer1.crs)
-    for i, geometry in enumerate(layer1.geometry):
-        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-        if any(is_intersecting):
-            diff_result = explode([geometry.difference(cascaded_union([geom for geom in layer2.geometry[
-                is_intersecting]]))])
-            new_geometry.extend(diff_result)
-            if len(diff_result) > 0:
-                outdf = outdf.append([layer1._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
-        else:
-            new_geometry.append(geometry)
-            outdf = outdf.append(layer1._gpd_df.iloc[i], ignore_index=True)
-
-    outdf.geometry = new_geometry
-    return outdf
-
-
-def _intersection(layer1, layer2):
-    """ Intersection between 2 layers
-
-    :param layer1:
-    :param layer2:
-    :return:
-    """
-    new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
-    for i, geometry in enumerate(layer1.geometry):
-        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-        if any(is_intersecting):
-            new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
-            # new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
-            #     is_intersecting]]))])
-            other_layer = layer2[is_intersecting]
-            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-            outdf = outdf.append(concat([df.drop("geometry", axis=1), other_layer._gpd_df.drop("geometry", axis=1)],
-                                        axis=1), ignore_index=True)
-
-    outdf.geometry = new_geometry
-    return outdf
-
-
 # def _symmetric_difference(layer1, layer2):
 #     """
 #
@@ -1678,6 +1742,11 @@ def _intersection(layer1, layer2):
 
 
 if __name__ == "__main__":
+    quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp")
+    city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp")
+    test = quarter.distance(city_block)
+    print(test)
+
     from matplotlib import pyplot as plt
     from utils.sys.timer import Timer
     roads = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
@@ -1686,6 +1755,8 @@ if __name__ == "__main__":
     commune = PolygonLayer("/home/benjamin/Documents/Data/Geo "
                            "layers/BD_PARCELLAIRE/BDPARCELLAIRE/1_DONNEES_LIVRAISON_2017-07-00270/BDPV_1"
                            "-2_SHP_UTM22RGFG95_D973/COMMUNE.SHP").to_crs(roads.crs)
+    test = cascaded_intersection([roads])
+
     with Timer() as t:
         # union = roads.overlay(commune, how="intersection")
         difference = roads.overlay(wpda, how="union")
