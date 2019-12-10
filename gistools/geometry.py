@@ -645,6 +645,32 @@ def mesh(startx, starty, endx, endy, side=None, area=None):
     return polygons
 
 
+def nearest_feature(geometry, geometry_collection, r_tree=None):
+    """ Return nearest feature from geometry collection to given geometry
+
+    If some of the geometries intersect, the nearest feature is the one whose centroid is the closest to the centroid
+    of the given geometry (but distance remains 0)
+    :param geometry:
+    :param geometry_collection:
+    :param r_tree: rtree index corresponding to geometry collection
+    :return: nearest feature index and corresponding distance
+    """
+    # Use Rtree to speed up !
+    if r_tree is None:
+        r_tree = r_tree_idx(geometry_collection)
+
+    # Look if some geometries intersect
+    list_of_intersecting_features, _ = intersecting_features(geometry, geometry_collection, r_tree)
+
+    if list_of_intersecting_features:
+        distance = [geometry.centroid.distance(geometry_collection[n].centroid) for n in list_of_intersecting_features]
+        return list_of_intersecting_features[np.argmin(distance)], 0
+    else:
+        list_of_nearest_features = list(r_tree.nearest(geometry.bounds, 1))
+        distance = [geometry.distance(geometry_collection[n]) for n in list_of_nearest_features]
+        return list_of_nearest_features[np.argmin(distance)], np.min(distance)
+
+
 def no_artifact_unary_union(geoms, eps=0.00001):
     """ Make unary union that does not return artifacts
 
