@@ -4,7 +4,6 @@
 
 More detailed description.
 """
-from geopandas import GeoDataFrame
 from itertools import combinations
 
 from gistools.layer import PolygonLayer, cascaded_intersection
@@ -45,10 +44,7 @@ def all_possible_addresses(list_of_polygon_layers, address_attribute_name='name'
     while "there are deeper levels of intersection":
 
         for comb in combinations(layers, intersection_level + 1):
-            layer = cascaded_intersection(comb)
-            layer['address'] = ",".join([level if level in layer.attributes() else "" for level in address_levels])
-            layer['min_delta'], layer['max_delta'] = layer.distance_of_centroid_to_boundary()
-            addresses.append(layer)
+            addresses.append(cascaded_intersection(comb))
 
         if intersection_level == len(layers) - 1:
             break
@@ -59,6 +55,9 @@ def all_possible_addresses(list_of_polygon_layers, address_attribute_name='name'
 
     for address in addresses[1::]:
         result = result.append(address)
+
+    result['min_delta'], result['max_delta'] = result.distance_of_centroid_to_boundary()
+    result['address'] = result["level0"].str.cat([result[level] for level in address_levels[1::]], sep=',', na_rep="")
 
     return result
 
@@ -73,15 +72,23 @@ class Address:
 
 
 if __name__ == "__main__":
+    from gistools.layer import LineLayer
+    from utils.sys.timer import Timer
     admin_l10 = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_10.shp")
     admin_l11 = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_11.shp")
     admin_l10_l11 = admin_l10.overlay(admin_l11, how="union").explode().to_crs(epsg=32723)
-    place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
-                                 "").to_crs(epsg=32723)
-    city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
-                              "").to_crs(epsg=32723)
+    admin_l10_l11["name"] = admin_l10_l11["name_1"].str.cat(admin_l10_l11["name_2"], sep="", na_rep="")
+    admin_l10_l11 = admin_l10.append(admin_l11).explode().to_crs(epsg=32723)
+    zone = admin_l10_l11.drop_attribute(admin_l10_l11.attributes())
+    # place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
+    #                              "").to_crs(epsg=32723)
+    # city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
+    #                           "").to_crs(epsg=32723)
+    with Timer() as t:
+        street = LineLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/highway.shp"
+                           ).to_crs(epsg=32723).overlay(zone, how="intersection")
 
-    test = all_possible_addresses([admin_l10_l11, place_quarter, city_block])
-    test.to_file("test.shp")
-
-    print(test)
+    # with Timer() as t:
+    #     test = all_possible_addresses([admin_l10_l11, place_quarter, city_block, street])
+    print("spent time: %s" % t)
+    # test.to_file("test.shp")
