@@ -21,7 +21,6 @@ from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from gistools.conversion import geopandas_to_array
 from gistools.coordinates import GeoGrid, r_tree_idx
-from gistools.distance import compute_distance
 from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, \
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
@@ -29,7 +28,7 @@ from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points
     area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana, nearest_feature
 from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
-from gistools.projections import is_equal, proj4_from, ellipsoid_from, proj4_from_layer
+from gistools.projections import is_equal, proj4_from, proj4_from_layer
 from numba import jit, float64, int64
 from pandas import concat, Series
 from rdp import rdp
@@ -82,19 +81,26 @@ def _intersection(layer1, layer2):
     :return:
     """
     new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
-    for i, geometry in enumerate(layer1.geometry):
-        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-        if any(is_intersecting):
-            new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
-            # new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
-            #     is_intersecting]]))])
-            other_layer = layer2[is_intersecting]
-            df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-            outdf = outdf.append(concat([df.drop("geometry", axis=1), other_layer._gpd_df.drop("geometry", axis=1)],
-                                        axis=1), ignore_index=True)
+    # outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
+    # df1 = df2 = gpd.GeoDataFrame()
+    df1 = []
+    df2 = []
+    from utils.sys.timer import Timer
+    with Timer() as t:
+        for i, geometry in enumerate(layer1.geometry):
+            is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+            if any(is_intersecting):
+                new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
+                df1.append(layer2[is_intersecting]._gpd_df)
+                df2.append([layer1._gpd_df.iloc[i]] * is_intersecting.count(True))
+    print("time1: %s" % t)
+
+    outdf = gpd.GeoDataFrame(crs=layer1.crs).append(concat([df1.drop("geometry", axis=1), df2.drop("geometry",
+                                                    axis=1)], axis=1), ignore_index=True)
 
     outdf.geometry = new_geometry
+    outdf = outdf[outdf.geometry.apply(lambda geom: isinstance(geom, (layer1._geometry_class,
+                                                                      layer1._multi_geometry_class)))]
     return outdf
 
 
@@ -664,32 +670,43 @@ class GeoLayer:
 
         return length
 
-    @type_assert(geo_grid=GeoGrid)
-    def min_distance_to_layer(self, geo_grid: GeoGrid):
-        """ Compute minimum distance to layer
+    @return_new_instance
+    def merge(self, on=None):
+        """ Merge data based on attribute
 
-        Compute minimum distance between points
-        from a defined georeferenced grid and the
-        point coordinates of the layer.
-        Return an array of min distance values
-
-        :param geo_grid: GeoGrid class instance
+        :param on:
         :return:
-
-        :Example:
-            *
         """
+        # TODO: implement method
+
+    ########################
+    # 12/11/2019: Deprecated
+    # @type_assert(geo_grid=GeoGrid)
+    # def min_distance_to_layer(self, geo_grid: GeoGrid):
+    #     """ Compute minimum distance to layer
+    #
+    #     Compute minimum distance between points
+    #     from a defined georeferenced grid and the
+    #     point coordinates of the layer.
+    #     Return an array of min distance values
+    #
+    #     :param geo_grid: GeoGrid class instance
+    #     :return:
+    #
+    #     :Example:
+    #         *
+    #     """
         # Initialize min distance array
-        min_distance = np.full(geo_grid.latitude.shape, 1e9)
-
+        # min_distance = np.full(geo_grid.latitude.shape, 1e9)
+        #
         # Iterate over all geometries of layer objects
-        for obj in self.geometry:
-            for x, y in zip(obj.coords.xy[0], obj.coords.xy[1]):
-                distance = compute_distance(x, y, geo_grid.longitude, geo_grid.latitude, geo_grid.type,
-                                            ellipsoid_from(self.crs))
-                min_distance = np.minimum(distance, min_distance)
-
-        return min_distance
+        # for obj in self.geometry:
+        #     for x, y in zip(obj.coords.xy[0], obj.coords.xy[1]):
+        #         distance = compute_distance(x, y, geo_grid.longitude, geo_grid.latitude, geo_grid.type,
+        #                                     ellipsoid_from(self.crs))
+        #         min_distance = np.minimum(distance, min_distance)
+        #
+        # return min_distance
 
     def nearest_neighbor(self, other):
         """ Get nearest neighbor in other layer
@@ -1026,6 +1043,10 @@ class GeoLayer:
 
     @property
     def bounds(self):
+        return self._gpd_df.bounds
+
+    @property
+    def total_bounds(self):
         return self._gpd_df.total_bounds
 
     @property
