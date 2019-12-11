@@ -84,9 +84,10 @@ if __name__ == "__main__":
     #                              "").to_crs(epsg=32723)
     # city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
     #                           "").to_crs(epsg=32723)
+    street = LineLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/highway.shp").to_crs(epsg=32723)
     with Timer() as t:
-        street = LineLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/highway.shp"
-                           ).to_crs(epsg=32723).overlay(zone, how="intersection")
+        street = street.overlay(zone, how="intersection")
+    street.to_file("/home/benjamin/Desktop/APUREZA/street.shp")
 
     # with Timer() as t:
     #     test = all_possible_addresses([admin_l10_l11, place_quarter, city_block, street])
