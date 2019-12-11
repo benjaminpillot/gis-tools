@@ -30,7 +30,7 @@ from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, proj4_from_layer
 from numba import jit, float64, int64
-from pandas import concat, Series
+from pandas import concat, Series, DataFrame
 from rdp import rdp
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
@@ -46,6 +46,16 @@ from utils.toolset import split_list_by_index
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
+
+
+def _append(list_of_dataframes):
+    """ Fast append using pandas concat
+
+    :param list_of_dataframes: list of dataframes/series
+    :return:
+    """
+
+    return DataFrame(concat(list_of_dataframes, axis=0, ignore_index=True))
 
 
 def _difference(layer1, layer2):
@@ -81,24 +91,19 @@ def _intersection(layer1, layer2):
     :return:
     """
     new_geometry = []
-    # outdf = gpd.GeoDataFrame(columns=layer1.attributes() + layer2.attributes(), crs=layer1.crs)
-    # df1 = df2 = gpd.GeoDataFrame()
+    gdf1 = layer1._gpd_df.drop("geometry", axis=1)
+    gdf2 = layer2._gpd_df.drop("geometry", axis=1)
     df1 = []
     df2 = []
-    from utils.sys.timer import Timer
-    with Timer() as t:
-        for i, geometry in enumerate(layer1.geometry):
-            is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-            if any(is_intersecting):
-                new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
-                df1.append(layer2[is_intersecting]._gpd_df)
-                df2.append([layer1._gpd_df.iloc[i]] * is_intersecting.count(True))
-    print("time1: %s" % t)
+    for i, geometry in enumerate(layer1.geometry):
+        is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
+        if any(is_intersecting):
+            new_geometry.extend([geometry.intersection(geom) for geom in layer2.geometry[is_intersecting]])
+            df1.extend([gdf1.iloc[[i]]] * is_intersecting.count(True))  # [[i]] to get DataFrame rather than a Series
+            df2.append(gdf2[is_intersecting])
 
-    outdf = gpd.GeoDataFrame(crs=layer1.crs).append(concat([df1.drop("geometry", axis=1), df2.drop("geometry",
-                                                    axis=1)], axis=1), ignore_index=True)
-
-    outdf.geometry = new_geometry
+    df1_df2 = concat([concat(df1, ignore_index=True), concat(df2, ignore_index=True)], axis=1)
+    outdf = gpd.GeoDataFrame(df1_df2, geometry=new_geometry, crs=layer1.crs)
     outdf = outdf[outdf.geometry.apply(lambda geom: isinstance(geom, (layer1._geometry_class,
                                                                       layer1._multi_geometry_class)))]
     return outdf
