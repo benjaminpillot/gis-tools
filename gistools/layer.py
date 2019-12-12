@@ -152,7 +152,7 @@ def concat_layers(list_of_layers):
     :param list_of_layers:
     :return:
     """
-    df = concat([layer._gpd_df for layer in list_of_layers], ignore_index=True)
+    df = concat([layer._gpd_df for layer in list_of_layers], sort=False, ignore_index=True)
 
     return list_of_layers[0].__class__.from_gpd(df, crs=list_of_layers[0].crs)
 
