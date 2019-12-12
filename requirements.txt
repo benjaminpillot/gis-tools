@@ -7,7 +7,7 @@ geopandas>=0.4.0
 greece-utils>=0.1.0
 matplotlib>=3.0.3
 metis>=0.2a4
-networkx>=2.1
+networkx==2.3
 numba>=0.44
 numpy>=1.14.3
 osmnx>=0.10
