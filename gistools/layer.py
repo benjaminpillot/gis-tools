@@ -58,6 +58,22 @@ def _append(list_of_dataframes):
     return DataFrame(concat(list_of_dataframes, axis=0, ignore_index=True))
 
 
+def _build_consistent_gdf(data, layer_class, **kwargs):
+    """ Build geopandas dataframe with consistent geometry
+
+    Eliminate inconsistent geometries (keep only consistent one, e.g. only lines, points or polygons)
+    :param data:
+    :param layer_class: GeoLayer class
+    :param kwargs:
+    :return:
+    """
+    outdf = gpd.GeoDataFrame(data, **kwargs)
+    outdf = outdf[outdf.geometry.apply(lambda geom: isinstance(geom, (layer_class._geometry_class,
+                                                                      layer_class._multi_geometry_class)))]
+
+    return outdf
+
+
 def _difference(layer1, layer2):
     """ Difference between 2 layers
 
@@ -65,8 +81,9 @@ def _difference(layer1, layer2):
     :param layer2:
     :return:
     """
+    gdf1 = layer1._gpd_df.drop("geometry", axis=1)
     new_geometry = []
-    outdf = gpd.GeoDataFrame(columns=layer1.attributes(), crs=layer1.crs)
+    df = []
     for i, geometry in enumerate(layer1.geometry):
         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
         if any(is_intersecting):
@@ -74,13 +91,12 @@ def _difference(layer1, layer2):
                 is_intersecting]]))])
             new_geometry.extend(diff_result)
             if len(diff_result) > 0:
-                outdf = outdf.append([layer1._gpd_df.iloc[i]] * len(diff_result), ignore_index=True)
+                df.extend([gdf1.iloc[[i]]] * len(diff_result))
         else:
             new_geometry.append(geometry)
-            outdf = outdf.append(layer1._gpd_df.iloc[i], ignore_index=True)
+            df.append(gdf1.iloc[[i]])
 
-    outdf.geometry = new_geometry
-    return outdf
+    return _build_consistent_gdf(concat(df, ignore_index=True), layer1.__class__, geometry=new_geometry, crs=layer1.crs)
 
 
 def _intersection(layer1, layer2):
@@ -102,11 +118,10 @@ def _intersection(layer1, layer2):
             df1.extend([gdf1.iloc[[i]]] * is_intersecting.count(True))  # [[i]] to get DataFrame rather than a Series
             df2.append(gdf2[is_intersecting])
 
+    # Use the pandas concat method to speed up dataframe appending
     df1_df2 = concat([concat(df1, ignore_index=True), concat(df2, ignore_index=True)], axis=1)
-    outdf = gpd.GeoDataFrame(df1_df2, geometry=new_geometry, crs=layer1.crs)
-    outdf = outdf[outdf.geometry.apply(lambda geom: isinstance(geom, (layer1._geometry_class,
-                                                                      layer1._multi_geometry_class)))]
-    return outdf
+
+    return _build_consistent_gdf(df1_df2, layer1.__class__, geometry=new_geometry, crs=layer1.crs)
 
 
 def cascaded_intersection(list_of_layers):
@@ -129,6 +144,17 @@ def cascaded_intersection(list_of_layers):
             level += 1
         else:
             return intersection
+
+
+def concat_layers(list_of_layers):
+    """
+
+    :param list_of_layers:
+    :return:
+    """
+    df = concat([layer._gpd_df for layer in list_of_layers], ignore_index=True)
+
+    return list_of_layers[0].__class__.from_gpd(df, crs=list_of_layers[0].crs)
 
 
 def check_proj(*crs, warning=True):
@@ -196,9 +222,10 @@ def iterate_over_geometry(replace_by_single=False):
             else:
                 bar = None
 
+            new_geometry = []
+
             # Begin iteration over geometries
             if replace_by_single:
-                new_geometry = []
                 for idx, geometry in enumerate(self.geometry):
                     new_geometry.append(method(self, geometry, *args, **kwargs))  # Call method here
 
@@ -211,18 +238,25 @@ def iterate_over_geometry(replace_by_single=False):
                 return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
 
             else:
-                outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-                append_bool = np.full(len(self), False)
+                df = []
+                gdf = self._gpd_df.drop("geometry", axis=1)
+                # outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
+                # append_bool = np.full(len(self), False)
 
+                # TODO: use concat method rather than append to speed up
                 for idx, geometry in enumerate(self.geometry):
-                    new_geometry = method(self, geometry, *args, **kwargs)  # Call method here
-                    if new_geometry:
-                        multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geometry),
-                                                           ignore_index=True)
-                        multdf.geometry = new_geometry
-                        outdf = outdf.append(multdf, ignore_index=True)
+                    new_geom = method(self, geometry, *args, **kwargs)  # Call method here
+                    if new_geom:
+                        df.extend([gdf.iloc[[idx]]] * len(new_geom))
+                        new_geometry.extend(new_geom)
+                        # multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geom),
+                        #                                    ignore_index=True)
+                        # multdf.geometry = new_geometry
+                        # outdf = outdf.append(multdf, ignore_index=True)
                     else:
-                        append_bool[idx] = True
+                        df.append(gdf.iloc[[idx]])
+                        new_geometry.append(geometry)
+                        # append_bool[idx] = True
 
                     if show_progressbar:
                         bar.update(idx)
@@ -230,7 +264,8 @@ def iterate_over_geometry(replace_by_single=False):
                 if show_progressbar:
                     bar.finish()
 
-                return outdf.append(self._gpd_df[append_bool], ignore_index=True)
+                return gpd.GeoDataFrame(concat(df, ignore_index=True), geometry=new_geometry, crs=self.crs)
+                # return outdf.append(self._gpd_df[append_bool], ignore_index=True)
 
         return wrapper
     return decorate
