@@ -6,7 +6,7 @@ More detailed description.
 """
 from itertools import combinations
 
-from gistools.layer import PolygonLayer, cascaded_intersection
+from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers
 from utils.check import is_iterable
 
 __author__ = 'Benjamin Pillot'
@@ -51,10 +51,11 @@ def all_possible_addresses(list_of_polygon_layers, address_attribute_name='name'
         else:
             intersection_level += 1
 
-    result = addresses[0]
-
-    for address in addresses[1::]:
-        result = result.append(address)
+    result = concat_layers(addresses)
+    # result = addresses[0]
+    #
+    # for address in addresses[1::]:
+    #     result = result.append(address)
 
     result['min_delta'], result['max_delta'] = result.distance_of_centroid_to_boundary()
     result['address'] = result["level0"].str.cat([result[level] for level in address_levels[1::]], sep=',', na_rep="")
@@ -80,16 +81,16 @@ if __name__ == "__main__":
     admin_l10_l11["name"] = admin_l10_l11["name_1"].str.cat(admin_l10_l11["name_2"], sep="", na_rep="")
     admin_l10_l11 = admin_l10.append(admin_l11).explode().to_crs(epsg=32723)
     zone = admin_l10_l11.drop_attribute(admin_l10_l11.attributes())
-    # place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
-    #                              "").to_crs(epsg=32723)
-    # city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
-    #                           "").to_crs(epsg=32723)
+    place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
+                                 "").to_crs(epsg=32723)
+    city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
+                              "").to_crs(epsg=32723)
     street = LineLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/highway.shp").to_crs(epsg=32723)
-    with Timer() as t:
-        street = street.overlay(zone, how="intersection")
-    street.to_file("/home/benjamin/Desktop/APUREZA/street.shp")
+    street = street.overlay(zone, how="intersection")
+    street = street.buffer(50).explode()
 
-    # with Timer() as t:
-    #     test = all_possible_addresses([admin_l10_l11, place_quarter, city_block, street])
+    with Timer() as t:
+        test = all_possible_addresses([admin_l10_l11, place_quarter, city_block, street])
     print("spent time: %s" % t)
-    # test.to_file("test.shp")
+    test = test.dissolve(by="address")
+    test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addresses.shp")
