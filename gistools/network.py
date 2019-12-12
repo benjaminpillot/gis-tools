@@ -71,6 +71,7 @@ def remote_edges(graph):
 def remote_nodes(graph):
     """ Return remote nodes
 
+    Remote nodes are isolated nodes that are not connected to anything
     :param graph:
     :return:
     """
