@@ -12,6 +12,7 @@ from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
 from osmnx.settings import default_crs
+from pandas import concat
 from shapely.geometry import LineString, MultiPolygon, Polygon, Point
 from utils.check import check_string
 
@@ -43,22 +44,24 @@ def _to_multipolygon_features(json):
     :return: GeoJSON FeatureCollection
     """
     features = []
-    elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] == 'multipolygon']
+    # 12/13/2019: change to add multiple types in tags ("multipolygon" AND "boundary")
+    elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] in ('multipolygon',
+                                                                                                     'boundary')]
     for elem in elements:
         collection = []
         for member in elem['members']:
-            member_coords = []
-            for node in member['geometry']:
-                member_coords.append([node['lon'], node['lat']])
-            collection.append(LineString(member_coords))
+            if member['type'] == 'way':
+                member_coords = [(node['lon'], node['lat']) for node in member['geometry']]
+                collection.append(LineString(member_coords))
         geom_collection = merge(collection)
 
-        if len(geom_collection) > 1:
-            geom = MultiPolygon([Polygon(line) for line in geom_collection])
-        else:
-            geom = Polygon(geom_collection[0])
-
-        features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
+        if geom_collection:
+            try:
+                geom = MultiPolygon([Polygon(line) for line in geom_collection])
+            except ValueError:
+                pass
+            else:
+                features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
 
     return geojson.FeatureCollection(features)
 
@@ -79,8 +82,34 @@ def _to_point_features(json):
 
 
 def _to_polygon_features(json):
-    """
+    """ Read json response and extract polygon geometries
 
+    :param json:
+    :return:
+    """
+    features = []
+    elements = [e for e in json['elements'] if e.get('type') == 'way']
+    for elem in elements:
+        coords = [[node['lon'], node['lat']] for node in elem['geometry']]
+        try:
+            geom = Polygon(coords)
+        except ValueError:
+            pass
+        else:
+            features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
+
+    return geojson.FeatureCollection(features)
+
+
+def _to_multi_line_features(json):
+    pass
+
+
+def _to_multi_point_features(json):
+    """ Read json response and extract multi-node (relation) geometries
+
+    Some OSM relations correspond to nodes.
+    see https://wiki.openstreetmap.org/wiki/Types_of_relation
     :param json:
     :return:
     """
@@ -143,22 +172,23 @@ def json_to_geodataframe(response, geometry_type):
     :param geometry_type: type of geometry to extract ('point', 'linestring', 'polygon', 'multipolygon')
     :return:
     """
-    geometry_type = check_string(geometry_type, ('point', 'linestring', 'polygon', 'multipolygon'))
+    geometry_type = check_string(geometry_type, ('point', 'linestring', 'polygon'))
 
     if geometry_type == 'point':
         return gpd.GeoDataFrame.from_features(_to_point_features(response), crs=default_crs)
     elif geometry_type == 'linestring':
         return gpd.GeoDataFrame.from_features(_to_linestring_features(response), crs=default_crs)
     elif geometry_type == 'polygon':
-        return gpd.GeoDataFrame.from_features(_to_polygon_features(response), crs=default_crs)
-    elif geometry_type == 'multipolygon':
-        return gpd.GeoDataFrame.from_features(_to_multipolygon_features(response), crs=default_crs)
+        poly_df = gpd.GeoDataFrame.from_features(_to_polygon_features(response), crs=default_crs)
+        multi_poly_df = gpd.GeoDataFrame.from_features(_to_multipolygon_features(response), crs=default_crs)
+
+        return concat([poly_df, multi_poly_df], ignore_index=True, sort=False)
 
 
 def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeout=180):
     """ QL query (thanks to https://github.com/yannforget/OSMxtract for inspiration !)
 
-    :param osm_type: OSM geometry type str {'node', 'way', 'relation'}
+    :param osm_type: OSM geometry type str {'node', 'way', 'relation', 'nwr'}
     :param tag: OSM tag to query
     :param values: str/list of possible values for the provided OSM tag
     :param bounds: geometry bounds
@@ -166,7 +196,7 @@ def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeou
     :param timeout:
     :return:
     """
-    osm_type = check_string(osm_type, ('node', 'way', 'relation'))
+    osm_type = check_string(osm_type, ('node', 'way', 'relation', 'nwr'))
 
     if isinstance(values, str):
         values = [values]
@@ -181,19 +211,19 @@ def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeou
 
     if values:
         if len(values) > 1:
-            query = f'["{ tag }"~"{ "|".join(values) }"]'
+            tags = f'["{ tag }"~"{ "|".join(values) }"]'
         else:
-            query = f'["{ tag }"="{ values[0] }"]'
+            tags = f'["{ tag }"="{ values[0] }"]'
     else:
-        query = f'["{tag}"]'
+        tags = f'["{tag}"]'
 
-    return f'[out:json][timeout:{timeout}];{osm_type}{query}{boundary};out geom;'
+    return f'[out:json][timeout:{timeout}];{osm_type}{tags}{boundary};out geom;'
 
 
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
     # test = ox.graph_from_place('Piedmont, California, USA', network_type='walk')
-    jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'relation', 'place', 'city_block')
+    jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'way', 'building')
     gdf = json_to_geodataframe(jsons[0], 'linestring')
     gdf.to_file('test.shp')
 

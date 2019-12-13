@@ -30,7 +30,7 @@ from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, proj4_from_layer
 from numba import jit, float64, int64
-from pandas import concat, Series, DataFrame
+from pandas import concat, Series
 from rdp import rdp
 from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
@@ -46,16 +46,6 @@ from utils.toolset import split_list_by_index
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
-
-
-def _append(list_of_dataframes):
-    """ Fast append using pandas concat
-
-    :param list_of_dataframes: list of dataframes/series
-    :return:
-    """
-
-    return DataFrame(concat(list_of_dataframes, axis=0, ignore_index=True))
 
 
 def _build_consistent_gdf(data, layer_class, **kwargs):
@@ -146,17 +136,6 @@ def cascaded_intersection(list_of_layers):
             return intersection
 
 
-def concat_layers(list_of_layers):
-    """
-
-    :param list_of_layers:
-    :return:
-    """
-    df = concat([layer._gpd_df for layer in list_of_layers], sort=False, ignore_index=True)
-
-    return list_of_layers[0].__class__.from_gpd(df, crs=list_of_layers[0].crs)
-
-
 def check_proj(*crs, warning=True):
     """ Check equality of projections
 
@@ -175,21 +154,15 @@ def check_proj(*crs, warning=True):
                           ProjectionWarning)
 
 
-def return_new_instance(method):
-    """ Decorator for returning new instance of GeoLayer and subclasses
+def concat_layers(list_of_layers):
+    """
 
-    :param method:
+    :param list_of_layers:
     :return:
     """
-    @wraps(method)
-    def _return_new_instance(self, *args, **kwargs):
-        output = method(self, *args, **kwargs)
-        if isinstance(output, gpd.GeoDataFrame):
-            new_self = self.__class__(output, name=self.name)
-            return new_self
-        else:
-            return output
-    return _return_new_instance
+    df = concat([layer._gpd_df for layer in list_of_layers], sort=False, ignore_index=True)
+
+    return list_of_layers[0].__class__.from_gpd(df, crs=list_of_layers[0].crs)
 
 
 def iterate_over_geometry(replace_by_single=False):
@@ -271,6 +244,23 @@ def iterate_over_geometry(replace_by_single=False):
     return decorate
 
 
+def return_new_instance(method):
+    """ Decorator for returning new instance of GeoLayer and subclasses
+
+    :param method:
+    :return:
+    """
+    @wraps(method)
+    def _return_new_instance(self, *args, **kwargs):
+        output = method(self, *args, **kwargs)
+        if isinstance(output, gpd.GeoDataFrame):
+            new_self = self.__class__(output, name=self.name)
+            return new_self
+        else:
+            return output
+    return _return_new_instance
+
+
 class GeoLayer:
     """ GeoLayer base class
 
@@ -286,6 +276,8 @@ class GeoLayer:
 
     _geometry_class = None
     _multi_geometry_class = None
+
+    _osm_type = None
 
     def __init__(self, layer, name: str = 'layer'):
         """ GeoLayer constructor
@@ -1204,27 +1196,15 @@ class GeoLayer:
 
         :param place: single place name query (e.g.: "London", "Paris", etc.)
         :param tag: OSM tag
-        :param values: values corresponding to OSM tag
+        :param values: str/list of possible values corresponding to OSM tag
         :param by_poly: if True, search within place's corresponding polygon, otherwise use bounds
         :param timeout:
         :return:
         """
-        if cls._geometry_class == Point:
-            osm_type = 'node'
-        elif cls._geometry_class == LineString:
-            osm_type = 'way'
-        else:
-            osm_type = 'relation'
-
-        if cls._geometry_class == Polygon:
-            geometry_type = 'multipolygon'
-        else:
-            geometry_type = cls._geometry_class.__name__
-
         list_of_gdf = []
-        jsons = download_osm_features(place, osm_type, tag, values, by_poly, timeout)
+        jsons = download_osm_features(place, cls._osm_type, tag, values, by_poly, timeout)
         for json in jsons:
-            list_of_gdf.append(json_to_geodataframe(json, geometry_type))
+            list_of_gdf.append(json_to_geodataframe(json, cls._geometry_class.__name__))
 
         return cls(gpd.GeoDataFrame(concat(list_of_gdf, ignore_index=True), crs=list_of_gdf[0].crs), name=tag)
 
@@ -1240,6 +1220,7 @@ class PolygonLayer(GeoLayer):
     _split_threshold = 'area'
     _geometry_class = Polygon
     _multi_geometry_class = MultiPolygon
+    _osm_type = 'nwr'
 
     def __init__(self, *args, **kwargs):
 
@@ -1538,6 +1519,8 @@ class LineLayer(GeoLayer):
     _geometry_class = LineString
     _multi_geometry_class = MultiLineString
 
+    _osm_type = 'way'
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -1743,6 +1726,8 @@ class PointLayer(GeoLayer):
     _geometry_class = Point
     _multi_geometry_class = MultiPoint
 
+    _osm_type = 'node'
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -1751,93 +1736,6 @@ class PointLayer(GeoLayer):
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
 
 
-# def _symmetric_difference(layer1, layer2):
-#     """
-#
-#     :param layer1:
-#     :param layer2:
-#     :return:
-#     """
-#     new_geometry = []
-#     outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
-#     for i, geometry in enumerate(layer1.geometry):
-#         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-#         if any(is_intersecting):
-#             new_geometry.extend([geometry.intersection(cascaded_union([geom for geom in layer2.geometry[
-#                 is_intersecting]]))])
-#             other_layer = layer2[is_intersecting]
-#             df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-#             outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
-#
-#     outdf.geometry = new_geometry
-#     return outdf
-
-
-# def _union(layer1, layer2):
-#     """ Union of 2 layers
-#
-#     :param layer1:
-#     :param layer2:
-#     :return:
-#     """
-#     if layer1.__class__ != layer2.__class__:
-#         raise GeoLayerError("Union can only be performed on same layer type but layer 1 is '%s' and layer 2 is '%s'" % (
-#             layer1.__class__.__name__, layer2.__class__.__name__))
-#     new_geom = []
-#     outdf = gpd.GeoDataFrame(columns=list(layer1.attributes()) + list(layer2.attributes()), crs=layer1.crs)
-#     for i, geometry in enumerate(layer1.geometry):
-#         is_intersecting = intersects(geometry, layer2.geometry, layer2.r_tree_idx)
-#         if any(is_intersecting):
-#             new_geom.extend([cascaded_union([geometry] + [geom for geom in layer2.geometry[is_intersecting]])])
-#             other_layer = layer2[is_intersecting]
-#             df = gpd.GeoDataFrame().append([layer1._gpd_df.iloc[i]] * len(other_layer), ignore_index=True)
-#             outdf = outdf.append(concat([df, other_layer._gpd_df], axis=1), ignore_index=True)
-#         else:
-#             new_geom.append(geometry)
-#             df = gpd.GeoDataFrame().append(layer1._gpd_df.iloc[i], ignore_index=True)
-#             # TODO
-#
-#     # outdf = outdf.drop(columns=["geometry"])
-#     outdf.geometry = new_geom
-#     return outdf
-
-
 if __name__ == "__main__":
-    quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp")
-    city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp")
-    test = quarter.distance(city_block)
-    print(test)
-
-    from matplotlib import pyplot as plt
-    from utils.sys.timer import Timer
-    roads = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
-    wpda = PolygonLayer("/home/benjamin/Documents/Data/Geo layers/Protected "
-                        "areas/WDPA_Apr2018_GUF-shapefile-polygons.shp").to_crs(roads.crs)
-    commune = PolygonLayer("/home/benjamin/Documents/Data/Geo "
-                           "layers/BD_PARCELLAIRE/BDPARCELLAIRE/1_DONNEES_LIVRAISON_2017-07-00270/BDPV_1"
-                           "-2_SHP_UTM22RGFG95_D973/COMMUNE.SHP").to_crs(roads.crs)
-    test = cascaded_intersection([roads])
-
-    with Timer() as t:
-        # union = roads.overlay(commune, how="intersection")
-        difference = roads.overlay(wpda, how="union")
-    print("spent time: %s" % t)
-    difference.to_file("/home/benjamin/Documents/Data/Geo layers/Road network/roads_overlay.shp")
-    # plt.figure(1)
-    # wpda.plot()
-    # commune.plot()
-    # plt.show()
-
-    # plt.figure(2)
-    # union.plot()
-    # plt.show()
-
-    # from utils.sys.timer import Timer
-    # test = LineLayer("/home/benjamin/Documents/Data/Geo layers/Road network/roads.shp")
-    # with Timer() as t1:
-    #     g1 = test.douglas_peucker()
-    # with Timer() as t2:
-    #     g2 = test.douglas_peucker1(show_progressbar=True)
-    # print("dp1: %s, dp2: %s" % (t1, t2))
-    # print(g1)
-    # print(g2)
+    test = PolygonLayer.from_osm("Montpellier, France", "addr:street")
+    test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addr_street.shp")

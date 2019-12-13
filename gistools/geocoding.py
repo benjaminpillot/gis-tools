@@ -7,7 +7,7 @@ More detailed description.
 from itertools import combinations
 
 from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers
-from utils.check import is_iterable
+from utils.check import is_iterable, protected_property
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
@@ -67,15 +67,40 @@ class Address:
     """ Address base super class
 
     """
+    place = protected_property("place")
+    layers = protected_property("layers")
 
-    def __init__(self):
-        pass
+    def __init__(self, place):
+        """ Build class instance
 
-    def all_addresses(self):
+        :param place:
         """
+        self._place = place
+        self._layers = None
 
+    def get_osm_layers(self, tags, by_poly=True, timeout=180):
+        """ Retrieve OSM layers used for addressing (admin levels, streets, etc.)
+
+        :param tags: dictionary of tag/values
+        :param by_poly:
+        :param timeout:
         :return:
         """
+        self.layers = []
+        for key, val in tags.items():
+            if key == "highway":
+                self.layers.append(LineLayer.from_osm(self._place, key, val, by_poly=by_poly, timeout=timeout))
+            else:
+                self.layers.append(PolygonLayer.from_osm(self._place, key, val, by_poly=by_poly, timeout=timeout))
+
+
+    def all_addresses(self, street_buffer=20):
+        """
+
+        :param street_buffer:
+        :return:
+        """
+        pass
 
     def geocode(self):
         pass
@@ -84,11 +109,9 @@ class Address:
 if __name__ == "__main__":
     from gistools.layer import LineLayer
     from utils.sys.timer import Timer
-    admin_l10 = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_10.shp")
-    admin_l11 = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_11.shp")
-    admin_l10_l11 = admin_l10.overlay(admin_l11, how="union").explode().to_crs(epsg=32723)
-    admin_l10_l11["name"] = admin_l10_l11["name_1"].str.cat(admin_l10_l11["name_2"], sep="", na_rep="")
-    admin_l10_l11 = admin_l10.append(admin_l11).explode().to_crs(epsg=32723)
+    admin_l10_l11 = PolygonLayer.from_osm("Sao Sebastiao, Distrito Federal", 'admin_level', ("10", "11")).to_crs(
+        epsg=32723)
+    place_quarter = PolygonLayer.from_osm()
     zone = admin_l10_l11.drop_attribute(admin_l10_l11.attributes())
     place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
                                  "").to_crs(epsg=32723)
