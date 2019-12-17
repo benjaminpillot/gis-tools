@@ -7,6 +7,8 @@ More detailed description.
 from abc import abstractmethod
 from itertools import combinations
 
+from numpy import unique
+
 from gistools.exceptions import AddressConverterError, DictionaryConverterError
 from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers
 from pandas import read_csv
@@ -119,26 +121,12 @@ class Address:
 
         return self
 
-    def geocode(self, address_converter, address_builder):
-        """ Geocode addresses using converter and builder models
+    def geocode(self, address_converter):
+        """ Geocode addresses using converter model
 
         :param address_converter: AddressConverter instance
-        :param address_builder: AddressBuilder instance
         :return:
         """
-        pass
-
-
-class AddressBuilder:
-    """ Build address using corresponding address levels and corresponding regular expressions
-
-    """
-
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def build(self, *args, **kwargs):
         pass
 
 
@@ -162,6 +150,8 @@ class DictionaryConverter(AddressConverter):
     _dictionary = None
     _dictionary_columns = ('old', 'new', 'level')
 
+    _address_levels = None
+
     def __init__(self, dictionary_file):
         """
 
@@ -169,14 +159,22 @@ class DictionaryConverter(AddressConverter):
         """
         super().__init__()
         self.dictionary = dictionary_file
+        self._address_levels = unique(self.dictionary["level"])
 
-    def convert(self, address):
+    def convert(self, addresses):
         """ Convert old address string to new format
 
-        :param address: pandas Series
+        :param addresses: pandas Series
         :return:
         """
+        for add_level in self._address_levels:
+            level_dic = self.dictionary[self.dictionary["level"] == add_level]
+            for address in addresses:
+                test = level_dic['old'].apply(lambda old: old in address) and \
+                       level_dic['new'].apply(lambda new: new not in address)
 
+
+        # new_address = address.apply(lambda adr: adr.replace(self.dictionary["old"], self.dictionary["new"]))
 
     @property
     def dictionary(self):
