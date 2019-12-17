@@ -14,78 +14,12 @@ from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
 from osmnx.settings import default_crs
-from pandas import concat
-from shapely.geometry import LineString, MultiPolygon, Polygon, Point, MultiLineString
+from shapely.geometry import LineString, Point
 from utils.check import check_string
 
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
-
-
-# def _to_linestring_features(json):
-#     """ Read JSON response and extract linestring features
-#
-#     :param json: JSON response from overpass API
-#     :return:
-#     """
-#     features = []
-#     elements = [e for e in json['elements'] if e['type'] == 'way' or e['type'] == 'relation']
-#     for elem in elements:
-#         if elem['type'] == 'way':
-#             coords = [[node['lon'], node['lat']] for node in elem['geometry']]
-#             try:
-#                 geom = LineString(coords)
-#             except ValueError:
-#                 pass
-#             else:
-#                 features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
-#         elif elem['type'] == 'relation':
-#             collection = []
-#             for member in elem['members']:
-#                 if member['type'] == 'way':
-#                     member_coords = [(node['lon'], node['lat']) for node in member['geometry']]
-#                     collection.append(LineString(member_coords))
-#             geom_collection = merge(collection)
-#
-#             if geom_collection:
-#                 try:
-#                     geom = MultiLineString([LineString(line) for line in geom_collection])
-#                 except ValueError:
-#                     pass
-#                 else:
-#                     features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
-#
-#     return geojson.FeatureCollection(features)
-
-
-# def _to_multipolygon_features(json):
-#     """ Read json response and extract multipolygon features (geometry + attributes)
-#
-#     :param json: JSON response from overpass API
-#     :return: GeoJSON FeatureCollection
-#     """
-#     features = []
-#     # 12/13/2019: change to add multiple types in tags ("multipolygon" AND "boundary")
-#     elements = [e for e in json['elements'] if e.get('type') == 'relation' and e['tags']['type'] in ('multipolygon',
-#                                                                                                      'boundary')]
-#     for elem in elements:
-#         collection = []
-#         for member in elem['members']:
-#             if member['type'] == 'way':
-#                 member_coords = [(node['lon'], node['lat']) for node in member['geometry']]
-#                 collection.append(LineString(member_coords))
-#         geom_collection = merge(collection)
-#
-#         if geom_collection:
-#             try:
-#                 geom = MultiPolygon([Polygon(line) for line in geom_collection])
-#             except ValueError:
-#                 pass
-#             else:
-#                 features.append(geojson.Feature(id=elem['id'], geometry=geom, properties=_feature_tags(elem)))
-#
-#     return geojson.FeatureCollection(features)
 
 
 def _to_point_features(json):
@@ -211,12 +145,6 @@ def json_to_geodataframe(response, geometry_type):
         return gpd.GeoDataFrame.from_features(_to_point_features(response), crs=default_crs)
     else:
         return gpd.GeoDataFrame.from_features(_to_features(response, geometry_type), crs=default_crs)
-    # elif geometry_type == 'linestring':
-    #     return gpd.GeoDataFrame.from_features(_to_features(response, 'linestring'), crs=default_crs)
-    # elif geometry_type == 'polygon':
-    #     return gpd.GeoDataFrame.from_features(_to_features(response, 'polygon'), crs=default_crs)
-        # multi_poly_df = gpd.GeoDataFrame.from_features(_to_multipolygon_features(response), crs=default_crs)
-        # return concat([poly_df, multi_poly_df], ignore_index=True, sort=False)
 
 
 def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeout=180):
@@ -260,22 +188,6 @@ if __name__ == "__main__":
     jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'way', 'building')
     gdf = json_to_geodataframe(jsons[0], 'linestring')
     gdf.to_file('test.shp')
-
-    # test = ox.gdf_from_place(place)
-    # polygon_coord_strs = ox.get_polygons_coordinates(test.geometry[0])
-    # response_jsons = []
-    # for poly_coord_str in polygon_coord_strs:
-    #     # query = ql_query(test.geometry[0].bounds, "place", values=["city_block"])
-    #     query_template = '[out:json][timeout:180]; rel["place"="city_block"](poly:"{polygon}");out geom;'
-    #     query = query_template.format(polygon=poly_coord_str)
-    #     # query = '[out:json][timeout:180];area[name="{}"]->.' \
-    #     #         'londonarea; rel[place="city_block"](pivot.londonarea);out geom;'.format(place)
-    #     # response = overpass.request(query)
-    #     response = ox.overpass_request(data={'data': query}, timeout=180)
-    #     # response2 = requests.get('http://overpass-api.de/api/interpreter', params={'data': query})
-    #
-    #     feature_collection = overpass.as_geojson(response, 'multipolygons')
-    #     gdf = gpd.GeoDataFrame.from_features(feature_collection)
 
     gdf.plot()
     plt.show()

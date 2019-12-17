@@ -1519,7 +1519,7 @@ class LineLayer(GeoLayer):
     _geometry_class = LineString
     _multi_geometry_class = MultiLineString
 
-    _osm_type = 'way'
+    _osm_type = 'nwr'
 
     def __init__(self, *args, **kwargs):
 
@@ -1541,19 +1541,6 @@ class LineLayer(GeoLayer):
         :return: LineLayer instance
         """
         return self._douglas_peucker(tolerance, show_progressbar=show_progressbar)
-
-    # @return_new_instance
-    # def douglas_peucker(self, tolerance=0):
-    #     """ Apply the Douglas-Peucker algorithm to line geometries
-    #
-    #     :param tolerance: tolerance of accuracy in line generalization algorithm
-    #     :return: LineLayer instance
-    #     """
-    #     new_geometry = []
-    #     for geom in self.geometry:
-    #         new_geometry.append(LineString(rdp(np.array(geom.coords), epsilon=tolerance)))
-    #
-    #     return gpd.GeoDataFrame(self._gpd_df.copy(), geometry=new_geometry, crs=self.crs)
 
     @return_new_instance
     def linemerge(self, by, method="dissolve"):
@@ -1737,5 +1724,5 @@ class PointLayer(GeoLayer):
 
 
 if __name__ == "__main__":
-    test = PolygonLayer.from_osm("Montpellier, France", "addr:street")
+    test = PolygonLayer.from_osm("Montpellier, France", "addr:house_number")
     test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addr_street.shp")

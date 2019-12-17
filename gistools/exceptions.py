@@ -108,3 +108,11 @@ class SpatialDatabaseWarning(Warning):
 
 class QlQueryError(Exception):
     pass
+
+
+class AddressConverterError(Exception):
+    pass
+
+
+class DictionaryConverterError(AddressConverterError):
+    pass
