@@ -9,8 +9,8 @@ from itertools import combinations
 
 from numpy import unique
 
-from gistools.exceptions import AddressConverterError, DictionaryConverterError
-from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers
+from gistools.exceptions import DictionaryConverterError
+from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers, LineLayer
 from pandas import read_csv
 from utils.check import is_iterable, protected_property, check_string
 
@@ -167,12 +167,18 @@ class DictionaryConverter(AddressConverter):
         :param addresses: pandas Series
         :return:
         """
+        converted_addresses = addresses.copy()
         for add_level in self._address_levels:
             level_dic = self.dictionary[self.dictionary["level"] == add_level]
-            for address in addresses:
-                test = level_dic['old'].apply(lambda old: old in address) and \
-                       level_dic['new'].apply(lambda new: new not in address)
+            for n, address in enumerate(addresses):
+                old_new = level_dic['old'].apply(lambda old: old in address) & \
+                          level_dic['new'].apply(lambda new: new not in address)
+                converter = level_dic[old_new].squeeze()
 
+                if converter.size != 0:
+                    converted_addresses[n] = converted_addresses[n].replace(converter['old'], converter['new'])
+
+        return converted_addresses
 
         # new_address = address.apply(lambda adr: adr.replace(self.dictionary["old"], self.dictionary["new"]))
 
@@ -182,7 +188,7 @@ class DictionaryConverter(AddressConverter):
 
     @dictionary.setter
     def dictionary(self, dictionary_file):
-        dic = read_csv(dictionary_file)
+        dic = read_csv(dictionary_file, keep_default_na=False)
         for key in dic.columns:
             try:
                 check_string(key, self._dictionary_columns)
@@ -201,12 +207,20 @@ class LevenshteinConverter(AddressConverter):
 
 
 if __name__ == "__main__":
-    from gistools.layer import LineLayer
     from utils.sys.timer import Timer
-    test = Address("Sao Sebastiao, Distrito Federal")
-    test.get_osm_layers([("admin_level", ("10", "11")), ("place", "quarter"), ("place", "city_block"),
-                         ("highway",)], crs=32723).all_addresses()
-    test.addresses.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addresses.shp")
+    import pandas as pd
+    test = DictionaryConverter("/home/benjamin/Desktop/APUREZA/geocoding/dictionary/dictionary.csv")
+    dengue = pd.read_csv("/home/benjamin/Desktop/APUREZA/geocoding/dengue_database/dengue.csv")
+    addr = dengue["NM_LOGRADO"].str.cat([dengue["NM_COMPLEM"], dengue["NM_REFEREN"]], sep=',', na_rep="")
+    with Timer() as t:
+        new_addr = test.convert(addr)
+    print("spent time: %s" % t)
+
+    # from gistools.layer import LineLayer
+    # test = Address("Sao Sebastiao, Distrito Federal")
+    # test.get_osm_layers([("admin_level", ("10", "11")), ("place", "quarter"), ("place", "city_block"),
+    #                      ("highway",)], crs=32723).all_addresses()
+    # test.addresses.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addresses.shp")
 
 
     # admin_l10_l11 = PolygonLayer.from_osm("Sao Sebastiao, Distrito Federal", 'admin_level', ("10", "11")).to_crs(
