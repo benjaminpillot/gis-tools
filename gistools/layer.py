@@ -1074,6 +1074,10 @@ class GeoLayer:
         return self
 
     @property
+    def boundary(self):
+        return self._gpd_df.boundary
+
+    @property
     def bounds(self):
         return self._gpd_df.bounds
 
@@ -1292,7 +1296,7 @@ class PolygonLayer(GeoLayer):
 
         :return: Series of min and max distance
         """
-        min_distance = self._gpd_df.exterior.distance(self._gpd_df.centroid)
+        min_distance = self.boundary.distance(self._gpd_df.centroid)
         max_distance = self.hausdorff_distance(self._gpd_df.centroid)
 
         return min_distance, max_distance
