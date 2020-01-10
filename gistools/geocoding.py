@@ -160,37 +160,3 @@ class XParser(AddressParser):
 
     def parse(self, *args, **kwargs):
         pass
-
-
-if __name__ == "__main__":
-    from utils.sys.timer import Timer
-    import pandas as pd
-    # test = XParser("/home/benjamin/Desktop/APUREZA/geocoding/dictionary/dictionary.csv")
-    # dengue = pd.read_csv("/home/benjamin/Desktop/APUREZA/geocoding/dengue_database/dengue.csv")
-    # addr = dengue["NM_LOGRADO"].str.cat([dengue["NM_COMPLEM"], dengue["NM_REFEREN"]], sep=',', na_rep="")
-    # with Timer() as t:
-    #     new_addr = test.parse(addr)
-    # print("spent time: %s" % t)
-
-    test = Address("Sao Sebastiao, Distrito Federal")
-    test.get_osm_layers([("admin_level", ("10", "11")), ("place", "quarter"), ("place", "city_block"),
-                         ("highway",)], crs=32723).all_addresses()
-    test.addresses.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addresses.shp")
-
-
-    # admin_l10_l11 = PolygonLayer.from_osm("Sao Sebastiao, Distrito Federal", 'admin_level', ("10", "11")).to_crs(
-    #     epsg=32723)
-    # place_quarter = PolygonLayer.from_osm()
-    # zone = admin_l10_l11.drop_attribute(admin_l10_l11.attributes())
-    # place_quarter = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_quarter.shp"
-    #                              "").to_crs(epsg=32723)
-    # city_block = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/place_city_block.shp"
-    #                           "").to_crs(epsg=32723)
-    # street = LineLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/highway.shp").to_crs(epsg=32723)
-    # street = street.overlay(zone, how="intersection")
-    # street = street.buffer(25).explode()
-    #
-    # with Timer() as t:
-    #     test = all_addresses([admin_l10_l11, place_quarter, city_block, street], to='address')
-    # print("spent time: %s" % t)
-    # test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addresses.shp")
