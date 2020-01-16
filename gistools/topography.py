@@ -20,6 +20,40 @@ from gistools.coordinates import Ellipsoid
 # TODO: use Dozier algorithm (1981)
 # TODO: use algorithm from A. James Stewart (1998)
 
+
+def dozier(profile):
+    """
+
+    :return:
+    """
+    def slope(i_, j_):
+        if profile[j_] <= profile[i_]:
+            return 0
+        else:
+            return (profile[j_] - profile[i_])/(j_ - i_)
+
+    n = len(profile)
+    h = np.zeros(n, dtype=int)
+    h[n - 1] = n - 1
+    i = n - 2
+    while i >= 0:
+        j = i + 1
+        while "there is some horizon point":
+            if slope(i, j) < slope(j, h[j]):
+                j = h[j]
+            else:
+                if slope(i, j) > slope(j, h[j]):
+                    h[i] = j
+                elif slope(i, j) == 0:
+                    h[i] = i
+                else:
+                    h[i] = h[j]
+                break
+        i -= 1
+
+    return h
+
+
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
     """ Compute local get_horizon obstruction from Digital Elevation Model
 
@@ -173,3 +207,12 @@ def get_isometric_latitude(latitude, e):
     term_2 = ((1 - e * np.sin(latitude)) / (1 + e * np.sin(latitude))) ** (e / 2)
 
     return np.log(term_1 * term_2)
+
+
+if __name__ == "__main__":
+    from matplotlib import pyplot as plt
+    profile = np.random.randint(50, size=100)
+    horizon = dozier(profile)
+    print(horizon)
+    plt.plot(profile)
+    plt.show()
