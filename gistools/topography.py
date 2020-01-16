@@ -24,34 +24,35 @@ from gistools.coordinates import Ellipsoid
 def dozier(profile):
     """
 
+    :param profile:
     :return:
     """
-    def slope(i_, j_):
-        if profile[j_] <= profile[i_]:
+    def slope(point_i, point_j):
+        if profile[point_j] <= profile[point_i]:
             return 0
         else:
-            return (profile[j_] - profile[i_])/(j_ - i_)
+            return (profile[point_j] - profile[point_i]) / (point_j - point_i)
 
     n = len(profile)
-    h = np.zeros(n, dtype=int)
-    h[n - 1] = n - 1
+    horizon = np.zeros(n, dtype=int)
+    horizon[n - 1] = n - 1
     i = n - 2
     while i >= 0:
         j = i + 1
         while "there is some horizon point":
-            if slope(i, j) < slope(j, h[j]):
-                j = h[j]
+            if slope(i, j) < slope(j, horizon[j]):
+                j = horizon[j]
             else:
-                if slope(i, j) > slope(j, h[j]):
-                    h[i] = j
+                if slope(i, j) > slope(j, horizon[j]):
+                    horizon[i] = j
                 elif slope(i, j) == 0:
-                    h[i] = i
+                    horizon[i] = i
                 else:
-                    h[i] = h[j]
+                    horizon[i] = horizon[j]
                 break
         i -= 1
 
-    return h
+    return horizon
 
 
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
