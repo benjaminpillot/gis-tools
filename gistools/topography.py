@@ -4,6 +4,7 @@
 
 More detailed description.
 """
+from numba import jit, int64
 
 __version__ = '0.1'
 __author__ = 'Benjamin Pillot'
@@ -21,25 +22,28 @@ from gistools.coordinates import Ellipsoid
 # TODO: use algorithm from A. James Stewart (1998)
 
 
+@jit(nopython=True)
 def dozier(profile):
-    """
+    """ 1-D Dozier algorithm (see Dozier et al., 1981)
 
+    Without numba: 5.69 ms per loop
+    With numba: 14.6 µs per loop
     :param profile:
     :return:
     """
-    def slope(point_i, point_j):
-        if profile[point_j] <= profile[point_i]:
+    def slope(obs_point, distant_point):
+        if profile[distant_point] <= profile[obs_point]:
             return 0
         else:
-            return (profile[point_j] - profile[point_i]) / (point_j - point_i)
+            return (profile[distant_point] - profile[obs_point]) / (distant_point - obs_point)
 
-    n = len(profile)
-    horizon = np.zeros(n, dtype=int)
-    horizon[n - 1] = n - 1
-    i = n - 2
+    len_profile = len(profile)
+    horizon = np.zeros(len_profile, np.int64)
+    horizon[len_profile - 1] = len_profile - 1
+    i = len_profile - 2
     while i >= 0:
         j = i + 1
-        while "there is some horizon point":
+        while "looking for horizon point":
             if slope(i, j) < slope(j, horizon[j]):
                 j = horizon[j]
             else:
@@ -53,6 +57,17 @@ def dozier(profile):
         i -= 1
 
     return horizon
+
+
+def dozier_2d(dem, number_of_sectors, distance):
+    """
+
+    :param dem:
+    :param number_of_sectors:
+    :param distance:
+    :return:
+    """
+
 
 
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
