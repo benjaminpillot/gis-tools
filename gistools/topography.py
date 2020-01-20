@@ -22,6 +22,25 @@ from gistools.coordinates import Ellipsoid
 # TODO: use algorithm from A. James Stewart (1998)
 
 
+def dozier_queue(x, y, theta):
+    """
+
+    :param x:
+    :param y:
+    :param theta:
+    :return:
+    """
+    @jit(nppython=True)
+    def rotate():
+        return np.round(x * np.cos(theta) - y * np.sin(theta)), x * np.sin(theta) + y * np.cos(theta)
+
+    x_rotate, y_rotate = rotate()
+
+    profiles = []
+
+
+
+
 @jit(nopython=True)
 def dozier(profile):
     """ 1-D Dozier algorithm (see Dozier et al., 1981)
