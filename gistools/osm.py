@@ -180,15 +180,3 @@ def ql_query(osm_type, tag, values=None, bounds=None, polygon_coord=None, timeou
         tags = f'["{tag}"]'
 
     return f'[out:json][timeout:{timeout}];{osm_type}{tags}{boundary};out geom;'
-
-
-if __name__ == "__main__":
-    from matplotlib import pyplot as plt
-    # test = ox.graph_from_place('Piedmont, California, USA', network_type='walk')
-    jsons = download_osm_features('Sao Sebastiao, Distrito Federal, Brasil', 'way', 'building')
-    gdf = json_to_geodataframe(jsons[0], 'linestring')
-    gdf.to_file('test.shp')
-
-    gdf.plot()
-    plt.show()
-    print(gdf.columns)
