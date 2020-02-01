@@ -20,49 +20,6 @@ from gistools.coordinates import Ellipsoid
 # TODO: use Dozier algorithm (1981)
 # TODO: use algorithm from A. James Stewart (1998)
 
-
-def dozier(profile):
-    """
-
-    :return:
-    """
-    def slope(i_, j_):
-        if profile[j_] <= profile[i_]:
-            return 0
-        else:
-            return (profile[j_] - profile[i_])/(j_ - i_)
-
-    n = len(profile)
-    h = np.zeros(n, dtype=int)
-    h[n - 1] = n - 1
-    i = n - 2
-
-    number_of_loops = 0
-
-    while i >= 0:
-
-        j = i + 1
-        while "there is some horizon point":
-
-            number_of_loops += 1
-
-            if slope(i, j) < slope(j, h[j]):
-                j = h[j]
-            else:
-                if slope(i, j) > slope(j, h[j]):
-                    h[i] = j
-                elif slope(i, j) == 0:
-                    h[i] = i
-                else:
-                    h[i] = h[j]
-                break
-        i -= 1
-
-    print("Number of loops: %d" % number_of_loops)
-
-    return h
-
-
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
     """ Compute local get_horizon obstruction from Digital Elevation Model
 
@@ -216,13 +173,3 @@ def get_isometric_latitude(latitude, e):
     term_2 = ((1 - e * np.sin(latitude)) / (1 + e * np.sin(latitude))) ** (e / 2)
 
     return np.log(term_1 * term_2)
-
-
-if __name__ == "__main__":
-    from matplotlib import pyplot as plt
-    profile = np.random.randint(500, size=100)
-    profile2 = np.random.randint(500, size=200)
-    profile3 = np.random.randint(500, size=500)
-    horizon = dozier(profile)
-    horizon2 = dozier(profile2)
-    horizon3 = dozier(profile3)
