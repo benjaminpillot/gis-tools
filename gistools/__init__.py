@@ -8,7 +8,7 @@ More detailed description.
 # __all__ = []
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon, Point, MultiPoint
 
-__version__ = '0.15.94'
+__version__ = '0.16.0'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2019, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
