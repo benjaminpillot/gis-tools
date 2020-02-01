@@ -58,14 +58,25 @@ class SpatialDatabase:
 
         self.session = Session(self.engine)
 
-    def table_to_layer(self, table_name, geom_type=None):
+    def table_to_layer(self, table_name, geom_type=None, bounds=None, polygon_extent=None):
         """ Convert table from database to GeoLayer instance
 
         :param table_name: name of table
         :param geom_type: geometry type
+        :param bounds: bounding box (x_min, y_min, x_max, y_max)
+        :param polygon_extent: shapely polygon
         :return:
         """
-        df = GeoDataFrame.from_postgis('SELECT * FROM %s' % table_name, self.engine)
+        if bounds is not None and polygon_extent is None:
+            sql_string = f'SELECT * FROM {table_name} WHERE {table_name}.geom && ST_MakeEnvelope({bounds[0]}, ' \
+                         f'{bounds[1]}, {bounds[2]}, {bounds[3]})'
+        elif polygon_extent is not None and bounds is None:
+            sql_string = f'SELECT * FROM {table_name} WHERE ST_Within({table_name}.geom, {polygon_extent})'
+        else:
+            sql_string = f'SELECT * FROM {table_name}'
+
+        df = GeoDataFrame.from_postgis(sql_string, self.engine)
+
         if table_name in self.table_names and geom_type is None:
             try:
                 layer = PolygonLayer(df, name=table_name)
