@@ -10,7 +10,9 @@ GisTools allows some of the following operations:
 - [x] Fast polygon intersection and split
 - [x] Polygon partition based on graph theory (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
 - [x] Basic networking (shortest path)
-- [x] Downloading DEM from online databases
+- [x] Download DEM from online databases
+- [x] Download OSM layers through Overpass API
+- [x] Download layers from postgis spatial database
 - [x] Extract raster statistics with respect to vector layers (polygon/line)
 - [x] Raster to/from polygons conversion 
 - [x] Compute horizon obstruction from DEM
@@ -70,4 +72,12 @@ honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/do
 >>> polygon_layer = gistools.layer.PolygonLayer("path/to/layer.geojson")
 >>> new_partitioned_layer = polygon_layer.partition(threshold=2000, disaggregation_factor=20, 
                                                     split_method="hexana", contig=True)
+```
+
+### Example 5 (OSM)
+
+Import layer from OpenStreetMap and save to file
+```
+>>> polygon_layer = gistools.layer.PolygonLayer.from_osm("London, UK", "building", "residential")
+>>> polygon_layer.to_file("path/to/your/shapefile.shp")
 ```
