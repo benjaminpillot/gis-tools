@@ -212,9 +212,10 @@ def iterate_over_geometry(replace_by_single=False):
 
             else:
                 df = []
-                gdf = self._gpd_df.drop("geometry", axis=1)
-                # outdf = gpd.GeoDataFrame(columns=self._gpd_df.columns, crs=self.crs)
-                # append_bool = np.full(len(self), False)
+                try:
+                    gdf = self._gpd_df.drop(self.geometry.name, axis=1)
+                except KeyError:
+                    gdf = self._gpd_df
 
                 # TODO: use concat method rather than append to speed up
                 for idx, geometry in enumerate(self.geometry):
@@ -222,14 +223,9 @@ def iterate_over_geometry(replace_by_single=False):
                     if new_geom:
                         df.extend([gdf.iloc[[idx]]] * len(new_geom))
                         new_geometry.extend(new_geom)
-                        # multdf = gpd.GeoDataFrame().append([self._gpd_df.iloc[idx]] * len(new_geom),
-                        #                                    ignore_index=True)
-                        # multdf.geometry = new_geometry
-                        # outdf = outdf.append(multdf, ignore_index=True)
                     else:
                         df.append(gdf.iloc[[idx]])
                         new_geometry.append(geometry)
-                        # append_bool[idx] = True
 
                     if show_progressbar:
                         bar.update(idx)
@@ -238,7 +234,6 @@ def iterate_over_geometry(replace_by_single=False):
                     bar.finish()
 
                 return gpd.GeoDataFrame(concat(df, ignore_index=True), geometry=new_geometry, crs=self.crs)
-                # return outdf.append(self._gpd_df[append_bool], ignore_index=True)
 
         return wrapper
     return decorate
