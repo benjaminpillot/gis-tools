@@ -4,6 +4,7 @@
 
 More detailed description.
 """
+from numba import jit, int64, float64
 
 __version__ = '0.1'
 __author__ = 'Benjamin Pillot'
@@ -21,37 +22,107 @@ from gistools.coordinates import Ellipsoid
 # TODO: use algorithm from A. James Stewart (1998)
 
 
-def dozier(profile):
+@jit((float64[:], float64[:], float64[:], float64),  nopython=True)
+def dozier_queue(dem, x, y, theta):
     """
 
+    :param dem: array-like
+    :param x: array-like
+    :param y: array-like
+    :param theta:
     :return:
     """
-    def slope(i_, j_):
-        if profile[j_] <= profile[i_]:
+    def rotate():
+        return x * np.cos(theta) - y * np.sin(theta), x * np.sin(theta) + y * np.cos(theta)
+
+    x_rotate, y_rotate = rotate()
+    x_rotate = np.round_(x_rotate, 0, np.empty_like(x_rotate))
+    x_rotate_values = np.unique(x_rotate)
+
+    # profiles = [np.ndarray(shape=(1,), dtype=np.float64) for n in range(0)]
+    # coord_x = [np.ndarray(shape=(1,), dtype=np.float64) for n in range(0)]
+    # coord_y = [np.ndarray(shape=(1,), dtype=np.float64) for n in range(0)]
+    # distance = [np.ndarray(shape=(1,), dtype=np.float64) for n in range(0)]
+
+    # profiles = []
+    # coord_x = []
+    # coord_y = []
+    # distance = []
+    # profiles = [np.zeros((1,)) for n in range(0)]
+    # coord_x = [np.zeros((1,)) for n in range(0)]
+    # coord_y = [np.zeros((1,)) for n in range(0)]
+    # distance = [np.zeros((1,)) for n in range(0)]
+
+    # xx = x[x_rotate == x_rotate_values[0]]
+    # yy = y[x_rotate == x_rotate_values[0]]
+    # ry = y_rotate[x_rotate == x_rotate_values[0]]
+    # profile = dem[x_rotate == x_rotate_values[0]]
+    # ry_argsort = ry.argsort()
+    # profiles = [profile[ry_argsort]]
+    # coord_x = [xx[ry_argsort]]
+    # coord_y = [yy[ry_argsort]]
+    # distance = [np.sort(ry)]
+
+    for rx in x_rotate_values:
+        xx = x[x_rotate == rx]
+        yy = y[x_rotate == rx]
+        ry = y_rotate[x_rotate == rx]
+        profile = dem[x_rotate == rx]
+        ry_argsort = ry.argsort()
+        # profiles.append(profile[ry_argsort])
+        # coord_x.append(xx[ry_argsort])
+        # coord_y.append(yy[ry_argsort])
+        # distance.append(np.sort(ry))
+
+    # return profiles, distance, coord_x, coord_y
+
+
+@jit(nopython=True)
+def dozier(profile):
+    """ 1-D Dozier algorithm (see Dozier et al., 1981)
+
+    Without numba: 5.69 ms per loop
+    With numba: 14.6 µs per loop
+    :param profile:
+    :return:
+    """
+    def slope(obs_point, distant_point):
+        if profile[distant_point] <= profile[obs_point]:
             return 0
         else:
-            return (profile[j_] - profile[i_])/(j_ - i_)
+            return (profile[distant_point] - profile[obs_point]) / (distant_point - obs_point)
 
-    n = len(profile)
-    h = np.zeros(n, dtype=int)
-    h[n - 1] = n - 1
-    i = n - 2
+    len_profile = len(profile)
+    horizon = np.zeros(len_profile, np.int64)
+    horizon[len_profile - 1] = len_profile - 1
+    i = len_profile - 2
     while i >= 0:
         j = i + 1
-        while "there is some horizon point":
-            if slope(i, j) < slope(j, h[j]):
-                j = h[j]
+        while "looking for horizon point":
+            if slope(i, j) < slope(j, horizon[j]):
+                j = horizon[j]
             else:
-                if slope(i, j) > slope(j, h[j]):
-                    h[i] = j
+                if slope(i, j) > slope(j, horizon[j]):
+                    horizon[i] = j
                 elif slope(i, j) == 0:
-                    h[i] = i
+                    horizon[i] = i
                 else:
-                    h[i] = h[j]
+                    horizon[i] = horizon[j]
                 break
         i -= 1
 
-    return h
+    return horizon
+
+
+def dozier_2d(dem, number_of_sectors, distance):
+    """
+
+    :param dem:
+    :param number_of_sectors:
+    :param distance:
+    :return:
+    """
+
 
 
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
@@ -210,9 +281,13 @@ def get_isometric_latitude(latitude, e):
 
 
 if __name__ == "__main__":
-    from matplotlib import pyplot as plt
-    profile = np.random.randint(50, size=100)
-    horizon = dozier(profile)
-    print(horizon)
-    plt.plot(profile)
-    plt.show()
+    from gistools.raster import DigitalElevationModel
+    from utils.sys.timer import Timer
+    dem_lambert = DigitalElevationModel("/home/benjamin/Documents/gis-tools/gistools/examples/dem_lambert.tif",
+                                        no_data_value=-32768)
+    test = dozier_queue(dem_lambert.raster_array.flatten(), dem_lambert.geo_grid.longitude.flatten(),
+                        dem_lambert.geo_grid.latitude.flatten(), 5 * np.pi / 180)
+    with Timer() as t:
+        dozier_queue(dem_lambert.raster_array.flatten(), dem_lambert.geo_grid.longitude.flatten(),
+                     dem_lambert.geo_grid.latitude.flatten(), 5 * np.pi/180)
+    print("spent time: %s" % t)
