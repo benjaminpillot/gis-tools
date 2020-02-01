@@ -36,9 +36,16 @@ def dozier(profile):
     h = np.zeros(n, dtype=int)
     h[n - 1] = n - 1
     i = n - 2
+
+    number_of_loops = 0
+
     while i >= 0:
+
         j = i + 1
         while "there is some horizon point":
+
+            number_of_loops += 1
+
             if slope(i, j) < slope(j, h[j]):
                 j = h[j]
             else:
@@ -50,6 +57,8 @@ def dozier(profile):
                     h[i] = h[j]
                 break
         i -= 1
+
+    print("Number of loops: %d" % number_of_loops)
 
     return h
 
@@ -211,8 +220,9 @@ def get_isometric_latitude(latitude, e):
 
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
-    profile = np.random.randint(50, size=100)
+    profile = np.random.randint(500, size=100)
+    profile2 = np.random.randint(500, size=200)
+    profile3 = np.random.randint(500, size=500)
     horizon = dozier(profile)
-    print(horizon)
-    plt.plot(profile)
-    plt.show()
+    horizon2 = dozier(profile2)
+    horizon3 = dozier(profile3)
