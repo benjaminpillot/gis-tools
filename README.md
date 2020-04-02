@@ -55,7 +55,7 @@ Extract polygons from contour values in raster
 >>> layer = raster.contour(0.04, False).polygonize("attribute name").to_crs(epsg=4326)
 ```
 
-### Example 3
+### Example 3: download and build DEM tile
 
 Build DEM tile by downloading from CGIAR website and save to file
 ```
@@ -64,7 +64,7 @@ Build DEM tile by downloading from CGIAR website and save to file
 >>> dem.to_file("path/to/dem.tif")
 ```
 
-### Example 4
+### Example 4: partition a polygon
 
 Split a polygon layer into sub-polygons of equal area with respect to 
 honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
@@ -74,7 +74,7 @@ honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/do
                                                     split_method="hexana", contig=True)
 ```
 
-### Example 5 (OSM)
+### Example 5: OSM interface
 
 Import layer from OpenStreetMap and save to file
 ```
