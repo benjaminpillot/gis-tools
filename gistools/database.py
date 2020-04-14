@@ -60,16 +60,25 @@ class SpatialDatabase:
         self.session = Session(self.engine)
 
     def get_schema_names(self):
+        """ Get schema names in database
+
+        :return:
+        """
         return self.inspector.get_schema_names()
 
     def get_table_names(self, schema=None):
+        """ Get table names in database, according to schema
+
+        :param schema:
+        :return:
+        """
         return self.inspector.get_table_names(schema)
 
     def table_to_layer(self, table_name, schema=None, geom_type=None, bounds=None, polygon_extent=None):
         """ Convert table from database to GeoLayer instance
 
-        :param table_name: name of table
-        :param schema: database schema
+        :param table_name: name of table (case sensitive)
+        :param schema: database schema (case sensitive)
         :param geom_type: geometry type
         :param bounds: bounding box (x_min, y_min, x_max, y_max)
         :param polygon_extent: shapely polygon
