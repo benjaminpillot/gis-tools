@@ -27,7 +27,7 @@ GisTools allows some of the following operations:
 # __all__ = []
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon, Point, MultiPoint
 
-__version__ = '0.16.22'
+__version__ = '0.16.23'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2020, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
