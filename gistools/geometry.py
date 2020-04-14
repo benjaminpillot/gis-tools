@@ -16,7 +16,7 @@ from math import sqrt as msqrt
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
-from shapely.ops import cascaded_union, linemerge, unary_union
+from shapely.ops import cascaded_union, linemerge, unary_union, transform
 from utils.check.type import is_iterable, type_assert
 
 from gistools.coordinates import r_tree_idx
@@ -964,3 +964,17 @@ def split_polygon_collection(polygon_collection, threshold, method="katana", get
     split_method = {'katana': katana, 'katana_centroid': katana_centroid}
 
     return split_collection(polygon_collection, threshold, split_method[method], get_explode)
+
+
+def to_2d(geometry):
+    """ Convert 3D geometry to 2D
+
+    Credit to @feenster and @hunt3ri from
+    https://github.com/hotosm/tasking-manager/blob/master/server/services/grid/grid_service.py
+    :param geometry:
+    :return:
+    """
+    def _to_2d(x, y, z):
+        return tuple(filter(None, [x, y]))
+
+    return transform(_to_2d, geometry)
