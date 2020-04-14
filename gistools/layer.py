@@ -1733,8 +1733,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
-if __name__ == "__main__":
-    test = PolygonLayer.from_osm("Montpellier, France", "addr:house_number")
-    test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addr_street.shp")
