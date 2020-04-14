@@ -932,7 +932,10 @@ class GeoLayer:
         :return:
         """
         outdf = self._gpd_df.copy()
-        outdf.geometry = self._gpd_df.geometry.apply(to_2d)
+        try:
+            outdf.geometry = self._gpd_df.geometry.apply(to_2d)
+        except TypeError:
+            pass
 
         return outdf
 
