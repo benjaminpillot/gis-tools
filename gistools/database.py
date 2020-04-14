@@ -39,18 +39,19 @@ class SpatialDatabase:
 
         self.engine = create_engine('postgresql://%s:%s@%s/%s' % (user, passwd, ip, db_name), echo=True)
         self.db_name = db_name
+        self.inspector = inspect(self.engine)
 
-    def automap(self):
+    def automap(self, schema=None):
         """ Automatically map database into sqlalchemy ORM model
 
         """
 
         metadata = MetaData()
-        metadata.reflect(self.engine, only=self.table_names)
+        metadata.reflect(self.engine, only=self.get_table_names())
         base = automap_base(metadata=metadata)
         base.prepare()
 
-        for table_name in self.table_names:
+        for table_name in self.get_table_names(schema):
             try:
                 self.__setattr__(table_name.capitalize(), base.classes.__getattr__(table_name))
             except AttributeError:
@@ -58,26 +59,37 @@ class SpatialDatabase:
 
         self.session = Session(self.engine)
 
-    def table_to_layer(self, table_name, geom_type=None, bounds=None, polygon_extent=None):
+    def get_schema_names(self):
+        return self.inspector.get_schema_names()
+
+    def get_table_names(self, schema=None):
+        return self.inspector.get_table_names(schema)
+
+    def table_to_layer(self, table_name, schema=None, geom_type=None, bounds=None, polygon_extent=None):
         """ Convert table from database to GeoLayer instance
 
         :param table_name: name of table
+        :param schema: database schema
         :param geom_type: geometry type
         :param bounds: bounding box (x_min, y_min, x_max, y_max)
         :param polygon_extent: shapely polygon
         :return:
         """
+        if schema is None:
+            schema = "public"
+
         if bounds is not None and polygon_extent is None:
-            sql_string = f'SELECT * FROM {table_name} WHERE {table_name}.geom && ST_MakeEnvelope({bounds[0]}, ' \
-                         f'{bounds[1]}, {bounds[2]}, {bounds[3]})'
+            sql_string = f'SELECT * FROM "{schema}"."{table_name}" WHERE "{schema}"."{table_name}".geom && ' \
+                         f'ST_MakeEnvelope({bounds[0]}, {bounds[1]}, {bounds[2]}, {bounds[3]})'
         elif polygon_extent is not None and bounds is None:
-            sql_string = f'SELECT * FROM {table_name} WHERE ST_Within({table_name}.geom, {polygon_extent})'
+            sql_string = f'SELECT * FROM "{schema}"."{table_name}" WHERE ST_Within("{schema}"."{table_name}".geom, ' \
+                         f'{polygon_extent})'
         else:
-            sql_string = f'SELECT * FROM {table_name}'
+            sql_string = f'SELECT * FROM "{schema}"."{table_name}"'
 
         df = GeoDataFrame.from_postgis(sql_string, self.engine)
 
-        if table_name in self.table_names and geom_type is None:
+        if table_name in self.get_table_names(schema) and geom_type is None:
             try:
                 layer = PolygonLayer(df, name=table_name)
             except GeoLayerError:
@@ -85,7 +97,7 @@ class SpatialDatabase:
                     layer = LineLayer(df, name=table_name)
                 except GeoLayerError:
                     layer = PointLayer(df, name=table_name)
-        elif table_name in self.table_names and geom_type is not None:
+        elif table_name in self.get_table_names(schema) and geom_type is not None:
             try:
                 geom_type = check_string(geom_type, ("point", "line", "polygon"))
             except ValueError:
@@ -96,8 +108,3 @@ class SpatialDatabase:
             raise SpatialDatabaseError("No table named '%s' in database '%s'" % (table_name, self.db_name))
 
         return layer
-
-    @property
-    def table_names(self):
-        inspector = inspect(self.engine)
-        return inspector.get_table_names()
