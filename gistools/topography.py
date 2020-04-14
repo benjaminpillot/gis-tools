@@ -4,17 +4,16 @@
 
 More detailed description.
 """
+import numpy as np
+
 from numba import jit, int64, float64
+
+from gistools.coordinates import Ellipsoid
 
 __version__ = '0.1'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2018, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
-
-
-import numpy as np
-
-from gistools.coordinates import Ellipsoid
 
 
 # TODO: use Numba
@@ -122,7 +121,7 @@ def dozier_2d(dem, number_of_sectors, distance):
     :param distance:
     :return:
     """
-
+    pass
 
 
 def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance=0.5, precision=1):
@@ -278,16 +277,3 @@ def get_isometric_latitude(latitude, e):
     term_2 = ((1 - e * np.sin(latitude)) / (1 + e * np.sin(latitude))) ** (e / 2)
 
     return np.log(term_1 * term_2)
-
-
-if __name__ == "__main__":
-    from gistools.raster import DigitalElevationModel
-    from utils.sys.timer import Timer
-    dem_lambert = DigitalElevationModel("/home/benjamin/Documents/gis-tools/gistools/examples/dem_lambert.tif",
-                                        no_data_value=-32768)
-    test = dozier_queue(dem_lambert.raster_array.flatten(), dem_lambert.geo_grid.longitude.flatten(),
-                        dem_lambert.geo_grid.latitude.flatten(), 5 * np.pi / 180)
-    with Timer() as t:
-        dozier_queue(dem_lambert.raster_array.flatten(), dem_lambert.geo_grid.longitude.flatten(),
-                     dem_lambert.geo_grid.latitude.flatten(), 5 * np.pi/180)
-    print("spent time: %s" % t)
