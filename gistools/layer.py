@@ -25,7 +25,8 @@ from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, 
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, add_points_to_line, \
     radius_of_curvature, shared_area_among_collection, intersects, intersecting_features, katana_centroid, \
-    area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana, nearest_feature
+    area_partition_polygon, shape_factor, is_in_collection, overlapping_features, overlaps, hexana, nearest_feature, \
+    to_2d
 from gistools.osm import download_osm_features, json_to_geodataframe
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, proj4_from_layer
@@ -183,6 +184,7 @@ def iterate_over_geometry(replace_by_single=False):
         @return_new_instance
         def wrapper(self, *args, **kwargs):
 
+            # TODO: use tqdm rather than progressbar2
             # Display progress bar in console if necessary
             try:
                 show_progressbar = kwargs["show_progressbar"]
@@ -922,6 +924,17 @@ class GeoLayer:
         method = check_string(method, self._split_methods.keys())
 
         return self._split(threshold, method, no_multipart, show_progressbar=show_progressbar)
+
+    @return_new_instance
+    def to_2d(self):
+        """ Convert 3D geometry to 2D
+
+        :return:
+        """
+        outdf = self._gpd_df.copy()
+        outdf.geometry = self._gpd_df.geometry.apply(to_2d)
+
+        return outdf
 
     def to_array(self, geo_grid: GeoGrid, attribute, data_type='uint8', all_touched=False):
         """ Convert layer to numpy array
@@ -1720,8 +1733,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
-if __name__ == "__main__":
-    test = PolygonLayer.from_osm("Montpellier, France", "addr:house_number")
-    test.to_file("/home/benjamin/Desktop/APUREZA/geocoding/addr_street.shp")
