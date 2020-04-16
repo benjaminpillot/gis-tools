@@ -13,6 +13,7 @@ numpy>=1.14.3
 osmnx>=0.10
 pandas>=0.24.2
 progressbar2>=3.39.3
+psycopg2>=2.8.3
 pyproj>=2.4.0
 rasterio>=1.0.18
 rdp>=0.8
