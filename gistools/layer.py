@@ -41,6 +41,9 @@ from utils.check import check_type, check_string, type_assert, protected_propert
 from utils.check.value import check_sub_collection_in_collection
 from utils.toolset import split_list_by_index
 
+GEOMETRY_CLASS = {'linestring': (LineString, MultiLineString), 'polygon': (Polygon, MultiPolygon),
+                  'point': (Point, MultiPoint)}
+
 # __all__ = []
 # __version__ = '0.1'
 
