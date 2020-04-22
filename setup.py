@@ -18,6 +18,6 @@ setup(name='gis_tools',
       author_email='benjaminpillot@riseup.net',
       install_requires=install_req,
       python_requires='>=3',
-      license='GNU GPL v3.0',
+      license='MIT',
       packages=find_packages(),
       zip_safe=False)
