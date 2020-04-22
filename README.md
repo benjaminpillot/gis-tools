@@ -1,6 +1,9 @@
 # GisTools
 Some geographical tools for python developers
 
+[![GitHub license](https://img.shields.io/github/license/benjaminpillot/gis-tools)](https://github.com/benjaminpillot/gis-tools/blob/master/LICENSE)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/benjaminpillot/gis-tools/graphs/commit-activity)
+
 ## Introduction
 GisTools is a small Python library for performing geographical computations. Typically, it gathers different tools from well-known libraries such as gdal, rasterio, geopandas, fiona and shapely.
 It allows easily mixing operations between vectors and raster maps (multi-band raster are not supported at the moment).
