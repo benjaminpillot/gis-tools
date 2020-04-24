@@ -25,6 +25,13 @@ GisTools allows some of the following operations:
 ## Requirements
 See ``requirements.txt``.
 
+### Note on GDAL
+Installing GDAL through `pip` might be tricky as it only gets
+the bindings, so be sure the library is already installed on 
+your machine, and that the headers are located in the right
+folder. Another solution may to install it through a third-party
+distribution such as `conda`.
+
 
 ## Install
 Pip installation should normally take care of everything for you.
