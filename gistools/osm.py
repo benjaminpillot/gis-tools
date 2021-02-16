@@ -8,13 +8,14 @@ response to geopandas dataframe (thanks to https://github.com/yannforget/OSMxtra
 """
 import geojson
 import geopandas as gpd
+from osmnx import geocode_to_gdf
+from osmnx.downloader import overpass_request
 
 from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
-from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
 from osmnx.settings import default_crs
 from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiPolygon, MultiPoint
-from utils.check import check_string
+from gistools.utils import check_string
 
 
 GEOMETRY_CLASS = {'linestring': (LineString, MultiLineString), 'polygon': (Polygon, MultiPolygon),
@@ -110,7 +111,7 @@ def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeo
     :param timeout:
     :return:
     """
-    gdf_geometry = gdf_from_place(place)
+    gdf_geometry = geocode_to_gdf(place)
 
     try:
         geometry = gdf_geometry.geometry[0]
@@ -123,12 +124,58 @@ def download_osm_features(place, osm_type, tag, values=None, by_poly=True, timeo
         polygon_coord_strs = get_polygons_coordinates(geometry)
         for poly_coord_str in polygon_coord_strs:
             query = ql_query(osm_type, tag, values, polygon_coord=poly_coord_str, timeout=timeout)
-            responses.append(overpass_request(data={'data': query}, timeout=180))
+            responses.append(overpass_request(data={'data': query}))
     else:
         query = ql_query(osm_type, tag, values, bounds=geometry.bounds, timeout=timeout)
-        responses.append(overpass_request(data={'data': query}, timeout=180))
+        responses.append(overpass_request(data={'data': query}))
 
     return responses
+
+
+def get_polygons_coordinates(geometry):
+    """
+    Extract exterior coordinates from polygon(s) to pass to OSM in a query by
+    polygon. Ignore the interior ("holes") coordinates.
+
+    Parameters
+    ----------
+    geometry : shapely Polygon or MultiPolygon
+        the geometry to extract exterior coordinates from
+
+    Returns
+    -------
+    polygon_coord_strs : list
+
+    Note
+    ----
+    Function from osmnx package version 0.10 (https://github.com/gboeing/osmnx)
+    """
+
+    # extract the exterior coordinates of the geometry to pass to the API later
+    polygons_coords = []
+    if isinstance(geometry, Polygon):
+        x, y = geometry.exterior.xy
+        polygons_coords.append(list(zip(x, y)))
+    elif isinstance(geometry, MultiPolygon):
+        for polygon in geometry:
+            x, y = polygon.exterior.xy
+            polygons_coords.append(list(zip(x, y)))
+    else:
+        raise TypeError('Geometry must be a shapely Polygon or MultiPolygon')
+
+    # convert the exterior coordinates of the polygon(s) to the string format
+    # the API expects
+    polygon_coord_strs = []
+    for coords in polygons_coords:
+        s = ''
+        separator = ' '
+        for coord in list(coords):
+            # round floating point lats and longs to 6 decimal places (ie, ~100 mm),
+            # so we can hash and cache strings consistently
+            s = '{}{}{:.6f}{}{:.6f}'.format(s, separator, coord[1], separator, coord[0])
+        polygon_coord_strs.append(s.strip(separator))
+
+    return polygon_coord_strs
 
 
 def json_to_geodataframe(response, geometry_type):
