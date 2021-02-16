@@ -15,22 +15,19 @@ from geopandas import GeoDataFrame
 from numba import jit, float64
 from shapely.geometry import Point, LineString
 from shapely.ops import linemerge
-from utils.toolset import split_list_by_index
-from utils.check.descriptor import protected_property
-from utils.check.type import check_type, type_assert, check_type_in_collection
-from utils.check.value import check_string
 
 from gistools.coordinates import r_tree_idx
 from gistools.exceptions import EdgeError, NetworkError, RoadError, RoadNodeError
 from gistools.geometry import connect_lines_to_point, centroid, intersects
 from gistools.layer import return_new_instance, LineLayer, PointLayer
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-
 
 # Division by zero
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import type_assert, check_type, check_type_in_collection
+from gistools.utils.check.value import check_string
+from gistools.utils.toolset import split_list_by_index
+
 np.seterr(divide='ignore')
 
 # Constants
@@ -160,7 +157,7 @@ class Edge(LineLayer):
         :return:
         """
         method = check_string(method, {'reconnect_and_delete', 'reconnect_and_keep', 'delete'})
-        sub_graphs = list(nx.connected_component_subgraphs(self._graph))
+        sub_graphs = list((self._graph.subgraph(c) for c in nx.connected_components(self._graph)))
         main_component = max(sub_graphs, key=len)
         sub_graphs.remove(main_component)
 
@@ -214,7 +211,8 @@ class Edge(LineLayer):
 
         :return:
         """
-        return self._point_layer_class.from_gpd(geometry=[Point(node) for node in self._graph.nodes()], crs=self.crs)
+        return self._point_layer_class.from_gpd(geometry=[Point(node) for node
+                                                          in self._graph.nodes()], crs=self.crs)
 
     def get_multi_edges(self):
         """ Get multiple edges between 2 nodes
@@ -246,7 +244,8 @@ class Edge(LineLayer):
         and ending coordinates of each road segment
         :return:
         """
-        return GeoDataFrame(self._gpd_df.copy(), geometry=[LineString(from_to) for from_to in self._from_to],
+        return GeoDataFrame(self._gpd_df.copy(),
+                            geometry=[LineString(from_to) for from_to in self._from_to],
                             crs=self.crs)
 
     def get_single_edges(self):
@@ -408,7 +407,8 @@ class Node(PointLayer):
         :param edges:
         :return:
         """
-        return [i for node in self.geometry for i, from_to in enumerate(edges.from_to) if (node.x, node.y) in from_to]
+        return [i for node in self.geometry for i, from_to
+                in enumerate(edges.from_to) if (node.x, node.y) in from_to]
 
 
 class Road(Edge):
