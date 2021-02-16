@@ -26,11 +26,11 @@ GisTools allows some of the following operations:
 
 # __all__ = []
 
-__version__ = '0.17.1'
+__version__ = '0.17.2'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2020, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
-__licence__ = "GNU GPL v3.0"
+__licence__ = "MIT"
 
 # from gistools.layer import *
 # from gistools.raster import *
