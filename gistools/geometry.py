@@ -5,9 +5,6 @@
 More detailed description.
 """
 
-# __all__ = []
-# __version__ = '0.1'
-
 import numpy as np
 import networkx as nx
 
@@ -17,14 +14,10 @@ from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
 from shapely.ops import cascaded_union, linemerge, unary_union, transform
-from utils.check.type import is_iterable, type_assert
 
 from gistools.coordinates import r_tree_idx
 from gistools.graph import part_graph
-
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.type import is_iterable, type_assert
 
 
 def add_points_to_line(line, threshold):
@@ -37,7 +30,8 @@ def add_points_to_line(line, threshold):
     return linemerge(cut_(line, threshold))
 
 
-def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split, recursive, **metis_options):
+def aggregate_partitions(polygons, weights, nparts, division,
+                         weight_attr, split, recursive, **metis_options):
     """ Aggregate polygons into partitions
 
     :param polygons: polygons to aggregate
@@ -52,7 +46,8 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split
     """
     if "contig" not in metis_options.keys():
         metis_options["contig"] = False
-    graph = polygon_collection_to_graph(polygons, weights, split, metis_options["contig"], weight_attr)
+    graph = polygon_collection_to_graph(polygons, weights, split,
+                                        metis_options["contig"], weight_attr)
     tpweights = [(d,) for d in division]
     partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
 
@@ -60,7 +55,8 @@ def aggregate_partitions(polygons, weights, nparts, division, weight_attr, split
     return explode([no_artifact_unary_union([polygons[n] for n in part]) for part in partition])
 
 
-def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision, recursive, split, **metis_options):
+def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
+                           recursive, split, **metis_options):
     """ Partition polygon into a subset of polygons of equal area
 
     :param polygon: polygon intended to be partitioned
@@ -87,7 +83,8 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
 
     area = [int(poly.area / precision) for poly in split_poly]
 
-    return aggregate_partitions(split_poly, area, nparts, division, "area", split, recursive, **metis_options)
+    return aggregate_partitions(split_poly, area, nparts, division, "area",
+                                split, recursive, **metis_options)
 
 
 def centroid(point_collection):
