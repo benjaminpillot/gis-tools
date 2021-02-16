@@ -9,17 +9,16 @@ response to geopandas dataframe (thanks to https://github.com/yannforget/OSMxtra
 import geojson
 import geopandas as gpd
 
-from gistools.layer import GEOMETRY_CLASS
 from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
 from osmnx.settings import default_crs
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiPolygon, MultiPoint
 from utils.check import check_string
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2019, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+
+GEOMETRY_CLASS = {'linestring': (LineString, MultiLineString), 'polygon': (Polygon, MultiPolygon),
+                  'point': (Point, MultiPoint)}
 
 
 def _to_point_features(json):
