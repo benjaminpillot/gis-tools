@@ -9,7 +9,7 @@ response to geopandas dataframe (thanks to https://github.com/yannforget/OSMxtra
 import geojson
 import geopandas as gpd
 
-from gistools import GEOMETRY_CLASS
+from gistools.layer import GEOMETRY_CLASS
 from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx import gdf_from_place, get_polygons_coordinates, overpass_request
