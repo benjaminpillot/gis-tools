@@ -29,10 +29,6 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
     :param metis_options:
     :return:
     """
-    # TODO: adapt code to networkx version 2.4 ! (The problem is about the metis module...)
-    # see https://networkx.github.io/documentation/stable/_modules/networkx/algorithms/components/connected.html
-    # nx.connected_component_subgraphs does not exist anymore in version 2.4 !
-    # graph = max(list([graph.subgraph(c).copy() for c in nx.connected_components(graph)]), key=len)
 
     # If contiguous partition is requested, only keep main contiguous graph component
     if metis_options["contig"]:
