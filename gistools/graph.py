@@ -17,10 +17,6 @@ try:
 except RuntimeError:  # No Metis DLL
     warnings.warn("Metis error. No graph partitioning will be available", ImportMetisWarning)
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-
 
 def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_options):
     """ Partition graph
@@ -54,8 +50,15 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
 
 
 if __name__ == "__main__":
+    from matplotlib import pyplot
     from gistools.layer import PolygonLayer
-    test = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_10.shp")
+    test = PolygonLayer("/home/benjamin/Documents/PRO/PROJET_GREECE_OPSPV/001_DONNEES/data_greece"
+                        "/Geo layers/Parc amazonien/enp_pn_s_973.shp")
+    # test = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_10.shp")
     test = test.to_crs(epsg=32723)
-    m = test.partition(50000, contig=True, ncuts=2)
+    m = test.partition(100000000, contig=True, ncuts=50, show_progressbar=True, objtype="cut")
+
+    m.plot()
+
+    pyplot.show()
 
