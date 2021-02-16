@@ -15,20 +15,14 @@ import rasterio
 from rasterio import features
 from rasterio.transform import Affine
 from osgeo import gdal, ogr, osr
-from utils.check.type import check_type, type_assert
 
 from gistools.coordinates import GeoGrid
 from gistools.projections import proj4_from
 
-# __all__ = []
-# __version__ = '0.1'
-
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2017, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-
 
 # Allow OGR and GDAL to throw Python exceptions
+from gistools.utils.check.type import check_type, type_assert
+
 ogr.UseExceptions()
 gdal.UseExceptions()
 
