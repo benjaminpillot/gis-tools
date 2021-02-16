@@ -19,18 +19,10 @@ from rtree import index
 
 from gistools.projections import proj4_from_raster
 from gistools.exceptions import GeoGridError, GeoGridWarning
-
-from utils.check.descriptor import protected_property
-from utils.check.type import type_assert, check_type, is_iterable
-from utils.check.value import check_string, check_file
-from utils.sys.reader import read_hdr
-
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2017, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-# __all__ = ["Ellipsoid", "GeoGrid", "LocationBase", "Location", "TIME_ZONE"]
-# __version__ = '0.1'
-
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import type_assert, check_type, is_iterable
+from gistools.utils.check.value import check_string, check_file
+from gistools.utils.sys import read_hdr
 
 REF_ELLIPSOID = pyproj.pj_ellps
 
