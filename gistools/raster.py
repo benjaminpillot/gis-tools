@@ -6,6 +6,7 @@ Toolset for working with static raster/array maps,
 defined as matrices of cell values lying on a
 geo-referenced grid
 """
+from matplotlib import pyplot as plt
 from rasterio import open as rasterio_open
 from rasterio.merge import merge as rasterio_merge
 from urllib.error import URLError
@@ -21,10 +22,6 @@ import copy
 
 import numpy as np
 from osgeo import gdal, ogr
-from matplotlib import pyplot as plt
-from utils.check.type import check_type, collection_type_assert, type_assert, isfile
-from utils.check.descriptor import protected_property
-from utils.check.value import check_string
 
 from gistools.coordinates import GeoGrid
 from gistools.conversion import raster_to_array, array_to_raster
@@ -33,12 +30,9 @@ from gistools.files import RasterTempFile, ShapeTempFile
 from gistools.layer import PolygonLayer, check_proj
 from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
 from gistools.surface import compute_surface
-
-__all__ = ["RasterMap", "DigitalElevationModel"]
-__version__ = '0.1'
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import check_type, type_assert, collection_type_assert, isfile
+from gistools.utils.check.value import check_string
 
 gdal.UseExceptions()
 
@@ -300,8 +294,8 @@ class RasterMap:
         return self._gdal_resample_raster(factor)
 
     @return_new_instance
-    @collection_type_assert(ll_point=dict(collection=(list, tuple), length=2, type=(int, float)), ur_point=dict(
-        collection=(list, tuple), type=(int, float), length=2))
+    @collection_type_assert(ll_point=dict(collection=(list, tuple), length=2, type=(int, float)),
+                            ur_point=dict(collection=(list, tuple), type=(int, float), length=2))
     def get_raster_at(self, layer=None, ll_point=None, ur_point=None):
         """ Extract sub-raster in current raster map
 
@@ -376,14 +370,15 @@ class RasterMap:
         :return:
         """
 
-        extent = [self.x_origin, self.x_origin + self.res * self.x_size, self.y_origin - self.res * self.y_size,
-                  self.y_origin]
+        extent = [self.x_origin, self.x_origin + self.res * self.x_size,
+                  self.y_origin - self.res * self.y_size, self.y_origin]
 
         if ax is None:
             _, ax = plt.subplots()
 
         # Use imshow to plot raster
-        img = ax.imshow(self.raster_array, extent=extent, cmap=cmap, vmin=self.min(), vmax=self.max(), **kwargs)
+        img = ax.imshow(self.raster_array, extent=extent, cmap=cmap,
+                        vmin=self.min(), vmax=self.max(), **kwargs)
 
         if colorbar:
             cbar = plt.colorbar(img)
