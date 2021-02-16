@@ -40,10 +40,11 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
 
     # If contiguous partition is requested, only keep main contiguous graph component
     if metis_options["contig"]:
-        graph = max(list(nx.connected_component_subgraphs(graph)), key=len)
+        graph = max((graph.subgraph(c) for c in nx.connected_components(graph)), key=len)
 
     graph.graph["node_weight_attr"] = node_weight_attr
-    _, parts = metis.part_graph(graph, nparts, tpwgts=tpweights, ubvec=None, recursive=recursive, **metis_options)
+    _, parts = metis.part_graph(graph, nparts, tpwgts=tpweights,
+                                ubvec=None, recursive=recursive, **metis_options)
     partition = [[] for _ in range(nparts)]
     for u, i in zip(graph, parts):
         partition[i].append(u)
