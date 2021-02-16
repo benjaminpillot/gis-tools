@@ -37,9 +37,11 @@ from shapely import wkb
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point, shape, MultiPoint
 from shapely.ops import cascaded_union
 from shapely.prepared import prep
-from utils.check import check_type, check_string, type_assert, protected_property, lazyproperty
-from utils.check.value import check_sub_collection_in_collection
-from utils.toolset import split_list_by_index
+
+from gistools.utils.check.descriptor import protected_property, lazyproperty
+from gistools.utils.check.type import check_type, type_assert
+from gistools.utils.check.value import check_string, check_sub_collection_in_collection
+from gistools.utils.toolset import split_list_by_index
 
 
 def _build_consistent_gdf(data, layer_class, **kwargs):
@@ -162,8 +164,9 @@ def concat_layers(list_of_layers):
 def iterate_over_geometry(replace_by_single=False):
     """ Decorator for wrapping iteration methods over geometries of layer
 
-    :param replace_by_single: if True, output layer has the same length, each geometry is replaced by a new single one.
-    If False, output layer gets a new length where each geometry is replaced by multiple geometries.
+    :param replace_by_single: if True, output layer has the same length,
+    each geometry is replaced by a new single one. If False, output layer
+    gets a new length where each geometry is replaced by multiple geometries.
     :return:
     """
     def decorate(method):
@@ -1158,27 +1161,8 @@ class GeoLayer:
         nearest_neighbor = np.zeros(len(self), dtype='int')
 
         for i, geom in enumerate(self.geometry):
-            nearest_neighbor[i], min_distance[i] = nearest_feature(geom, other.geometry, other.r_tree_idx)
-
-            # list_of_nearest_features = list(other.r_tree_idx.nearest(geom.bounds, 1))
-            # list_of_intersecting_features = list(other.r_tree_idx.intersection(geom.bounds))
-            # is_intersecting = [geom.intersects(other.geometry[f]) for f in list_of_intersecting_features]
-            # dist = []
-            # if not any(is_intersecting):
-            #     for f in list_of_nearest_features:
-            #         dist.append(geom.distance(other.geometry[f]))
-            #     min_dist[i] = np.min(dist)
-            #     if compute_nearest_neighbor:
-            #         nearest_feature = int(np.argmin(dist) % len(list_of_nearest_features))
-            #         nearest_neighbor[i] = list_of_nearest_features[nearest_feature]
-            # else:
-            #     if compute_nearest_neighbor:
-            #         list_of_truly_intersecting_features = [f for i, f in enumerate(list_of_intersecting_features) if
-            #                                                is_intersecting[i]]
-            #         for f in list_of_truly_intersecting_features:
-            #             dist.append(geom.centroid.distance(other.geometry[f].centroid))
-            #         nearest_neighbor[i] = list_of_truly_intersecting_features[int(np.argmin(dist) % len(
-            #             list_of_truly_intersecting_features))]
+            nearest_neighbor[i], min_distance[i] = nearest_feature(geom, other.geometry,
+                                                                   other.r_tree_idx)
 
         return min_distance, nearest_neighbor
 
@@ -1238,12 +1222,14 @@ class PolygonLayer(GeoLayer):
             raise PolygonLayerError("Geometry must be 'Polygon' but is '{}'".format(self._geom_type))
 
     @iterate_over_geometry()
-    def _partition(self, geometry, threshold, disaggregation_factor, precision, recursive, split_method,
+    def _partition(self, geometry, threshold, disaggregation_factor,
+                   precision, recursive, split_method,
                    show_progressbar, **metis_options):
         if geometry.area > threshold:
             return area_partition_polygon(
-                geometry, threshold, disaggregation_factor=disaggregation_factor, precision=precision,
-                recursive=recursive, split=self._split_methods[split_method], **metis_options)
+                geometry, threshold, disaggregation_factor=disaggregation_factor,
+                precision=precision, recursive=recursive, split=self._split_methods[
+                    split_method], **metis_options)
 
     def attr_area(self, other, attr_name: str, normalized: bool = False):
         """ Area of attribute from other PolygonLayer in current layer
@@ -1426,8 +1412,8 @@ class PolygonLayer(GeoLayer):
                                show_progressbar=show_progressbar, **metis_options)
 
     # TODO: define partition based on raster statistics
-    def rpartition(self, raster, nparts, parameter="sum", disaggregation_factor=16, split_method="hexana",
-                   **metis_options):
+    def rpartition(self, raster, nparts, parameter="sum",
+                   disaggregation_factor=16, split_method="hexana", **metis_options):
         """ Partition polygons using corresponding raster statistics
 
         :param raster: RasterMap class instance
