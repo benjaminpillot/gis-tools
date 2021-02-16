@@ -11,13 +11,9 @@ from gistools.exceptions import SpatialDatabaseWarning, SpatialDatabaseError, Ge
 from gistools.layer import PolygonLayer, PointLayer, LineLayer
 from sqlalchemy import create_engine, inspect, MetaData
 from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from utils.check import lazyproperty, check_string
+from sqlalchemy.orm import Session
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2019, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.value import check_string
 
 
 class SpatialDatabase:
