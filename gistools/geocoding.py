@@ -13,11 +13,9 @@ from numpy import unique
 from gistools.exceptions import DictionaryConverterError
 from gistools.layer import PolygonLayer, cascaded_intersection, concat_layers, LineLayer
 from pandas import read_csv
-from utils.check import is_iterable, protected_property, check_string
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2019, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.descriptor import protected_property
+from gistools.utils.check.type import is_iterable
 
 
 def all_addresses(list_of_polygon_layers, by='name', to='name', keeping_attributes=None):
@@ -93,7 +91,8 @@ class Address:
         :param street_buffer:
         :return:
         """
-        list_of_layers = [layer.buffer(street_buffer) if layer.name == "highway" else layer for layer in self._layers]
+        list_of_layers = [layer.buffer(street_buffer) if layer.name == "highway"
+                          else layer for layer in self._layers]
         self._addresses = all_addresses(list_of_layers, by='name', to='address')
 
         return self
