@@ -12,11 +12,8 @@ More detailed description.
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
-from utils.check.type import check_type
 
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.type import check_type
 
 
 def plot_geolayer(gl, ax=None, attribute=None, layer_label: str = None, layer_color=None, labels: str = None,
