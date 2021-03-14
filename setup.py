@@ -19,5 +19,5 @@ setup(name='gis_tools',
       install_requires=install_req,
       python_requires='>=3',
       license='MIT',
-      packages=find_packages(exclude=("examples",)),
+      packages=find_packages(exclude=("gistools/examples",)),
       zip_safe=False)
