@@ -22,7 +22,7 @@ from gistools.exceptions import GeoGridError, GeoGridWarning
 from gistools.utils.check.descriptor import protected_property
 from gistools.utils.check.type import type_assert, check_type, is_iterable
 from gistools.utils.check.value import check_string, check_file
-from gistools.utils.sys import read_hdr
+from gistools.utils.sys.reader import read_hdr
 
 REF_ELLIPSOID = pyproj.pj_ellps
 
