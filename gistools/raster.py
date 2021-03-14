@@ -714,7 +714,8 @@ class RasterMap:
 
         # Apply sieve filter
         with GdalOpen(self.raster_file) as source_ds:
-            gdal.SieveFilter(source_ds.GetRasterBand(1), None, dst_ds.GetRasterBand(1), *args, **kwargs)
+            gdal.SieveFilter(source_ds.GetRasterBand(1), None,
+                             dst_ds.GetRasterBand(1), *args, **kwargs)
 
     def _majority_filter(self):
         pass
