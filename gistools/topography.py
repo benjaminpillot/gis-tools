@@ -10,11 +10,6 @@ from numba import jit, int64, float64
 
 from gistools.coordinates import Ellipsoid
 
-__version__ = '0.1'
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-
 
 # TODO: use Numba
 # TODO: use Dozier algorithm (1981)
@@ -192,7 +187,8 @@ def get_horizon(latitude, longitude, dem, ellipsoid=Ellipsoid("WGS84"), distance
         idx_w = np.digitize(azimuth_dic["w"], az)
         elevation_dic["w"][n, idx_w < len(az)] = el[idx_w[idx_w < len(az)]]
 
-    sun_mask = np.concatenate([elevation_dic[key].max(0) for key in elevation_dic.keys()])
+    sun_mask = np.concatenate([elevation_dic[key].max(axis=0, initial=None) for key in
+                               elevation_dic.keys()])
     az_mask = np.concatenate([azimuth_dic[key] for key in azimuth_dic.keys()]) + 180
 
     horizon = dict(elevation=np.zeros((360 + precision)//precision),
