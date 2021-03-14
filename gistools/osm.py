@@ -15,8 +15,8 @@ from gistools.exceptions import QlQueryError
 from gistools.geometry import merge
 from osmnx.settings import default_crs
 from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiPolygon, MultiPoint
-from gistools.utils import check_string
 
+from gistools.utils.check.value import check_string
 
 GEOMETRY_CLASS = {'linestring': (LineString, MultiLineString), 'polygon': (Polygon, MultiPolygon),
                   'point': (Point, MultiPoint)}
