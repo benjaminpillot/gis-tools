@@ -15,7 +15,6 @@ GisTools allows some of the following operations:
 - [x] Polygon partition based on graph theory (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/download) package)
 - [x] Basic networking (shortest path)
 - [x] Download DEM from online databases
-- [x] Download OSM layers through Overpass API
 - [x] Download layers from postgis spatial database
 - [x] Extract raster statistics with respect to vector layers (polygon/line)
 - [x] Raster to/from polygons conversion 
@@ -85,10 +84,15 @@ honeycomb mesh (requires [METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/do
                                                     split_method="hexana", contig=True)
 ```
 
-### Example 5: OSM interface
+### Note on OSM
 
-Import layer from OpenStreetMap and save to file
-```
->>> polygon_layer = gistools.layer.PolygonLayer.from_osm("London, UK", "building", "residential")
->>> polygon_layer.to_file("path/to/your/shapefile.shp")
+You can use the fine `osmnx` package to download OSM features and then
+ use it as any other `GeoLayer` :
+```python
+from gistools.layer import PolygonLayer
+import osmnx as ox
+country = PolygonLayer.from_gpd(ox.geocode_to_gdf(
+    dict(country="France",
+         admin_level=2,
+         type="boundary")))
 ```
