@@ -10,6 +10,7 @@ import networkx as nx
 
 from math import sqrt as msqrt
 
+from numba import njit
 from shapely.errors import TopologicalError
 from shapely.geometry import MultiPolygon, GeometryCollection, Polygon, box, LineString, \
     Point, MultiLineString, JOIN_STYLE
@@ -310,7 +311,8 @@ def hexana(polygon, threshold):
 
 
 # Thanks to https://gist.github.com/urschrei/17cf0be92ca90a244a91
-def honeycomb(startx, starty, endx, endy, radius=None, area=None):
+@njit()
+def honeycomb_nb(startx, starty, endx, endy, radius):
     """
     Calculate a grid of hexagon coordinates of the given radius
     given lower-left and upper-right coordinates
@@ -323,8 +325,6 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
 
     You will probably want to use projected coordinates for this
     """
-    if not radius:
-        radius = msqrt(area / (2*msqrt(3)))
 
     # calculate side length given radius
     sl = (2 * radius) * np.tan(np.pi / 6)
@@ -350,9 +350,7 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
     xoffset = b
     yoffset = 3 * p
 
-    polygons = []
     row = 1
-    counter = 0
 
     while starty < endy:
         if row % 2 == 0:
@@ -380,13 +378,33 @@ def honeycomb(startx, starty, endx, endy, radius=None, area=None):
                 (p5x, p5y),
                 (p6x, p6y),
                 (p1x, p1y)]
-            polygons.append(Polygon(poly))
-            counter += 1
+            yield poly
             startx += w
         starty += yoffset
         row += 1
 
-    return polygons
+
+def honeycomb(startx, starty, endx, endy, radius=None, area=None):
+    """
+
+    Parameters
+    ----------
+    startx
+    starty
+    endx
+    endy
+    radius
+    area
+
+    Returns
+    -------
+
+    """
+
+    if not radius:
+        radius = msqrt(area / (2*msqrt(3)))
+
+    return (Polygon(poly) for poly in honeycomb_nb(startx, starty, endx, endy, radius))
 
 
 def intersecting_features(geometry, geometry_collection, r_tree=None):
