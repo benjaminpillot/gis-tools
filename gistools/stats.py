@@ -8,17 +8,13 @@ More detailed description.
 # __all__ = []
 # __version__ = '0.1'
 from math import sqrt as msqrt
-from utils.check.type import type_assert, check_type_in_collection
 
 import numpy as np
 
 from gistools.layer import GeoLayer
 from gistools.exceptions import ZonalStatisticsError
 from gistools.raster import RasterMap
-
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2018, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
+from gistools.utils.check.type import type_assert, check_type_in_collection
 
 
 class ZonalStatistics:
@@ -55,7 +51,8 @@ class ZonalStatistics:
         self._layer["idx"] = self._layer_index
 
         # Convert layer to array of indices
-        self._layer_array = self._layer.to_array(raster_.geo_grid, "idx", data_type='uint32', all_touched=all_touched)
+        self._layer_array = self._layer.to_array(raster_.geo_grid, "idx",
+                                                 data_type='uint32', all_touched=all_touched)
 
         # Raster
         self.raster = raster
@@ -132,7 +129,8 @@ class ZonalStatistics:
                 return [weight_method(cell[~np.isnan(cell)], weights=surf[~np.isnan(cell)], **kwargs) for cell, surf in
                         self._get_raster_cell_values_with_surface(raster)]
             else:
-                return [method(cell[~np.isnan(cell)], **kwargs) for cell in self._get_raster_cell_values(raster)]
+                return [method(cell[~np.isnan(cell)], **kwargs)
+                        for cell in self._get_raster_cell_values(raster)]
 
         if isinstance(self.raster, list):
             return [statistic(r) for r in self.raster]
