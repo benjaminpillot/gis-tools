@@ -1,1 +1,2 @@
 include requirements.txt README.md requirements.in
+recursive-exclude gistools/examples *
