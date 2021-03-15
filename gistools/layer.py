@@ -9,7 +9,6 @@ areas such as administrative boundaries, road/electrical networks,
 import copy
 import math
 import os
-import osmnx as ox
 import random
 import warnings
 from functools import wraps
@@ -32,7 +31,6 @@ from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points
 from gistools.plotting import plot_geolayer
 from gistools.projections import is_equal, proj4_from, proj4_from_layer
 from numba import njit
-from osmnx import geocode_to_gdf
 from pandas import concat, Series
 from rdp import rdp
 from shapely import wkb
@@ -2203,5 +2201,3 @@ class PointLayer(GeoLayer):
 
         if self._geom_type != 'Point':
             raise PointLayerError("Geometry must be 'Point' but is '{}'".format(self._geom_type))
-
-
