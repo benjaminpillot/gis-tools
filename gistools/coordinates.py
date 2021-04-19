@@ -17,7 +17,7 @@ from cpc.geogrids import Geogrid
 from osgeo import gdal
 from rtree import index
 
-from gistools.projections import proj4_from_raster
+from gistools.projections import crs_from_raster
 from gistools.exceptions import GeoGridError, GeoGridWarning
 from gistools.utils.check.descriptor import protected_property
 from gistools.utils.check.type import type_assert, check_type, is_iterable
@@ -194,7 +194,7 @@ class GeoGrid(Geogrid):
             raise GeoGridError("{} is not a valid geo file".format(geo_file))
 
         try:
-            to_crs = proj4_from(to_crs)
+            to_crs = pyproj.CRS(to_crs)
         except ValueError:
             warnings.warn("Empty or invalid CRS/proj name. Geo grid matching geo file projection", GeoGridWarning)
         else:
@@ -211,8 +211,8 @@ class GeoGrid(Geogrid):
         :param buffer_accuracy:
         :return:
         """
-        check_type(geopandas_series, (gpd.GeoDataFrame, gpd.GeoSeries), res, (int, float), buffer_accuracy, (int,
-                                                                                                             float))
+        check_type(geopandas_series, (gpd.GeoDataFrame, gpd.GeoSeries),
+                   res, (int, float), buffer_accuracy, (int, float))
         # Default type for geo grid
         geo_type = 'latlon'
 
@@ -263,7 +263,7 @@ class GeoGrid(Geogrid):
                      geo_transform[1] - geo_transform[1] / 2)
 
         # Geo type
-        if pyproj.Proj(proj4_from_raster(raster_file)).crs.is_geographic:
+        if crs_from_raster(raster_file).is_geographic:
             geo_type = "latlon"
         else:
             geo_type = "equal"
