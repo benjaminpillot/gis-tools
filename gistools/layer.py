@@ -22,14 +22,14 @@ from fiona.errors import FionaValueError
 from geopandas.io.file import infer_schema
 from gistools.conversion import geopandas_to_array
 from gistools.coordinates import GeoGrid, r_tree_idx
-from gistools.exceptions import GeoLayerError, GeoLayerWarning, LineLayerError, PointLayerError, \
+from gistools.exceptions import GeoLayerError, LineLayerError, PointLayerError, \
     PolygonLayerError, PolygonLayerWarning, GeoLayerEmptyError, ProjectionWarning
 from gistools.geometry import katana, fishnet, explode, cut, cut_, cut_at_points, \
     add_points_to_line, radius_of_curvature, shared_area_among_collection, intersects, \
     intersecting_features, katana_centroid, area_partition_polygon, shape_factor, \
     is_in_collection, overlapping_features, overlaps, hexana, nearest_feature, to_2d
 from gistools.plotting import plot_geolayer
-from gistools.projections import is_equal, proj4_from, proj4_from_layer
+from gistools.projections import crs_from_layer
 from numba import njit
 from pandas import concat, Series
 from rdp import rdp
@@ -171,9 +171,9 @@ def check_proj(*crs, warning=True):
         raise ValueError("At least 2 inputs are required")
 
     for crs1, crs2 in zip(crs[:-1], crs[1::]):
-        if not is_equal(crs1, crs2) and not warning:
+        if crs1 != crs2 and not warning:
             raise TypeError("Projections should be the same but are '%s' and '%s'" % (crs1, crs2))
-        elif not is_equal(crs1, crs2) and warning:
+        elif crs1 != crs2 and warning:
             warnings.warn("Different projections ('%s' and '%s') "
                           "might give unexpected results" % (crs1, crs2),
                           ProjectionWarning)
@@ -342,7 +342,7 @@ class GeoLayer:
                         output_collection.append(element)
                     except (AttributeError, ValueError):
                         pass
-                gpd_df = gpd.GeoDataFrame.from_features(output_collection, proj4_from_layer(layer))
+                gpd_df = gpd.GeoDataFrame.from_features(output_collection, crs_from_layer(layer))
         else:
             gpd_df = gpd.GeoDataFrame().append(layer, ignore_index=True)
 
@@ -1199,8 +1199,8 @@ class GeoLayer:
 
         Parameters
         ----------
-        crs: str
-            CRS name
+        crs: str or pyproj.CRS
+            valid pjection (proj4, CRS, etc.)
         epsg: int
             EPSG code
 
@@ -1210,25 +1210,23 @@ class GeoLayer:
         """
         if crs is not None:
             try:
-                crs = proj4_from(crs)
+                crs = pyproj.CRS(crs)
             except ValueError:
-                raise GeoLayerError("Unable to convert given CRS to proj4 format")
+                raise GeoLayerError("Invalid projection")
 
-        if epsg is not None and crs is None:
+        elif epsg is not None and crs is None:
             try:
-                crs = proj4_from(epsg)
+                crs = pyproj.CRS(epsg)
             except ValueError:
                 raise GeoLayerError("Invalid EPSG code")
-        elif epsg is not None and crs is not None:
-            warnings.warn("CRS already given. Skip EPSG code...", GeoLayerWarning)
 
-        if crs is not None:
-            if not is_equal(crs, self.crs):
-                return self._gpd_df.to_crs(crs=crs)
-            else:
-                return self.copy()
         else:
             raise GeoLayerError("Must set either crs or epsg code")
+
+        if crs != self.crs:
+            return self._gpd_df.to_crs(crs=crs)
+        else:
+            return self.copy()
 
     @type_assert(file_path=str)
     def to_csv(self, file_path, attributes=None, *args, **kwargs):
@@ -1369,7 +1367,7 @@ class GeoLayer:
 
     @property
     def crs(self):
-        return self.pyproj.srs
+        return self.pyproj.crs
 
     @property
     def exterior(self):
@@ -1540,6 +1538,9 @@ class PolygonLayer(GeoLayer):
         if self._geom_type != 'Polygon':
             raise PolygonLayerError("Geometry must be 'Polygon' "
                                     "but is '{}'".format(self._geom_type))
+
+        # Clean geometries
+        self._gpd_df.geometry = self._gpd_df.geometry.buffer(0, 0)
 
     @iterate_over_geometry()
     def _partition(self, geometry, threshold, disaggregation_factor,
