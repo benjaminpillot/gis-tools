@@ -124,12 +124,14 @@ def ellipsoid_from(proj):
 def srs_from(proj):
     """ Get spatial reference system from projection
 
-    :param proj:
+    :param proj: str
+        'epsg:code' or 'proj=proj_name'
     :return: SpatialReference instance (osgeo.osr package)
     """
-    proj4 = proj4_from(proj)
+    crs = pyproj.CRS(proj)
+    # proj4 = proj4_from(proj)
     srs = osr.SpatialReference()
-    srs.ImportFromProj4(proj4)
+    srs.ImportFromWkt(crs.to_wkt())
 
     return srs
 
@@ -141,3 +143,40 @@ def wkt_from(proj):
     :return:
     """
     return srs_from(proj).ExportToWkt()
+
+
+def crs_from_layer(layer):
+    """ Get pyproj CRS from layer file
+
+    Parameters
+    ----------
+    layer: str
+        file name
+
+    Returns
+    -------
+
+    """
+    ds = ogr.Open(layer)
+    crs = pyproj.CRS(ds.GetLayer().GetSpatialRef().ExportToWkt())
+    ds = None
+
+    return crs
+
+
+def crs_from_raster(raster):
+    """ Get pyproj CRS from raster file
+
+    Parameters
+    ----------
+    raster
+
+    Returns
+    -------
+
+    """
+    ds = gdal.Open(raster)
+    crs = pyproj.CRS(ds.GetProjection())
+    ds = None
+
+    return crs
