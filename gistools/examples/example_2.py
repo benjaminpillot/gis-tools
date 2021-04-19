@@ -9,12 +9,6 @@ from gistools.stats import ZonalStatistics
 from gistools.raster import RasterMap
 from gistools.layer import PolygonLayer
 
-# __all__ = []
-# __version__ = '0.1'
-__author__ = 'Benjamin Pillot'
-__copyright__ = 'Copyright 2017, Benjamin Pillot'
-__email__ = 'benjaminpillot@riseup.net'
-
 
 # Create a digital elevation model from SRTM DEM of French Guiana
 biomass = RasterMap("biomasse_ressource.tif", no_data_value=-9999)
