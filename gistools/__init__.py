@@ -26,7 +26,7 @@ GisTools allows some of the following operations:
 
 # __all__ = []
 
-__version__ = '0.17.7'
+__version__ = '0.17.8'
 __author__ = 'Benjamin Pillot'
 __copyright__ = 'Copyright 2020, Benjamin Pillot'
 __email__ = 'benjaminpillot@riseup.net'
