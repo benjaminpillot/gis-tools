@@ -6,6 +6,8 @@ Toolset for working with static raster/array maps,
 defined as matrices of cell values lying on a
 geo-referenced grid
 """
+import uuid
+
 from matplotlib import pyplot as plt
 from rasterio import open as rasterio_open
 from rasterio.merge import merge as rasterio_merge
@@ -28,7 +30,8 @@ from gistools.conversion import raster_to_array, array_to_raster
 from gistools.exceptions import RasterMapError, GeoGridError, DigitalElevationModelError
 from gistools.files import RasterTempFile, ShapeTempFile
 from gistools.layer import PolygonLayer, check_proj
-from gistools.projections import proj4_from_raster, is_equal, proj4_from, wkt_from, srs_from, ellipsoid_from
+from gistools.projections import wkt_from, srs_from, \
+    ellipsoid_from, crs_from_raster
 from gistools.surface import compute_surface
 from gistools.utils.check.descriptor import protected_property
 from gistools.utils.check.type import check_type, type_assert, collection_type_assert, isfile
@@ -49,7 +52,9 @@ def return_new_instance(method):
         if isinstance(output, np.ndarray):
             new_self = self.__class__(output, self.geo_grid, no_data_value=self.no_data_value, crs=self.crs)
         elif isinstance(output, tuple):
-            new_self = self.__class__(output[0], output[1], no_data_value=self.no_data_value, crs=self.crs)  # Return
+            new_self = self.__class__(output[0], output[1],
+                                      no_data_value=self.no_data_value,
+                                      crs=self.crs)  # Return
             # array AND GeoGrid
         else:
             new_self = output
@@ -82,7 +87,8 @@ class GdalOpen:
         return self.dataset
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        del self.dataset
+        # del self.dataset
+        self.dataset = None
 
 # TODO: raster map with band number
 
@@ -108,6 +114,9 @@ class RasterMap:
     _gdal_drv = gdal.GetDriverByName('GTiff')
     _ogr_shp_drv = ogr.GetDriverByName('ESRI Shapefile')
     _ogr_geojson_drv = ogr.GetDriverByName('GeoJSON')
+
+    # Temp file
+    _temp_raster_file = None
 
     # SetAccess = protected (property decorator)
     geo_grid = protected_property('geo_grid')
@@ -138,7 +147,8 @@ class RasterMap:
             raster_file = None
             try:
                 test_fit = geo_grid.data_fits(raster)
-                crs = proj4_from(crs)
+                crs = pyproj.CRS(crs)
+                # crs = proj4_from(crs)
                 if not test_fit:
                     raise RasterMapError("Input geo grid does not fit raster")
             except AttributeError:
@@ -149,7 +159,7 @@ class RasterMap:
             raster_file = raster
             try:
                 geo_grid = GeoGrid.from_raster_file(raster)
-                crs = proj4_from_raster(raster)
+                crs = crs_from_raster(raster)
                 raster = raster_to_array(raster)
             except RuntimeError:
                 raise RasterMapError("Invalid/unknown file '%s'" % raster_file)
@@ -173,6 +183,12 @@ class RasterMap:
 
         # Available filters
         self._filters = {"majority_filter": self._majority_filter, "sieve": self._gdal_sieve}
+
+    def __del__(self):
+        try:
+            os.remove(self._temp_raster_file)
+        except TypeError:
+            pass
 
     @type_assert(filter_name=str)
     def apply_filter(self, filter_name, *args, **kwargs):
@@ -332,7 +348,7 @@ class RasterMap:
         return self._raster_array[r, c]
 
     def is_latlong(self):
-        return pyproj.Proj(proj4_from(self.crs)).crs.is_geographic
+        return self.crs.is_geographic
 
     def is_no_data(self):
         return np.isnan(self.raster_array)
@@ -426,7 +442,7 @@ class RasterMap:
         :return:
         """
         try:
-            if not is_equal(self.crs, crs):
+            if self.crs != crs:
                 srs = srs_from(crs)
                 return self._gdal_warp(srs)
             else:
@@ -449,7 +465,8 @@ class RasterMap:
             except KeyError:
                 raise RasterMapError("Invalid data type '%s'" % data_type)
 
-        out = array_to_raster(raster_file, self.raster_array_without_nans, self.geo_grid, self.crs, datatype=dtype,
+        out = array_to_raster(raster_file, self.raster_array_without_nans,
+                              self.geo_grid, self.crs, datatype=dtype,
                               no_data_value=self.no_data_value)
 
         return out
@@ -488,9 +505,12 @@ class RasterMap:
         :return:
         """
         if not isfile(self._raster_file):
-            with RasterTempFile() as file:
-                self._raster_file = file
+            self._raster_file = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
             self.to_file(self._raster_file)
+            self._temp_raster_file = self._raster_file
+            # with RasterTempFile() as file:
+            #     self._raster_file = file
+            # self.to_file(self._raster_file)
 
         return self._raster_file
 
@@ -727,7 +747,8 @@ class RasterMap:
         :return:
         """
         with GdalOpen(self.raster_file) as source_ds:
-            dst_ds = self._gdal_drv.Create(out_raster, self.x_size, self.y_size, 1, source_ds.GetRasterBand(1).DataType)
+            dst_ds = self._gdal_drv.Create(out_raster, self.x_size, self.y_size, 1,
+                                           source_ds.GetRasterBand(1).DataType)
             dst_ds.SetGeoTransform(self.geo_grid.geo_transform)
             dst_ds.SetProjection(wkt_from(self.crs))
 
