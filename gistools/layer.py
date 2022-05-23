@@ -1200,7 +1200,7 @@ class GeoLayer:
         Parameters
         ----------
         crs: str or pyproj.CRS
-            valid pjection (proj4, CRS, etc.)
+            valid projection (proj4, CRS, etc.)
         epsg: int
             EPSG code
 
