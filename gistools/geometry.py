@@ -5,6 +5,9 @@
 More detailed description.
 """
 
+import multiprocessing as mp
+from functools import partial
+
 import numpy as np
 import networkx as nx
 
@@ -31,26 +34,39 @@ def add_points_to_line(line, threshold):
     return linemerge(cut_(line, threshold))
 
 
-def aggregate_partitions(polygons, weights, nparts, division,
-                         weight_attr, split, recursive, **metis_options):
-    """ Aggregate polygons into partitions
+def build_partitions(polygons, weights, nparts, tpweights,
+                     weight_attr, split_name, recursive, **metis_options):
+    """ Build partitions
 
-    :param polygons: polygons to aggregate
-    :param weights: polygons' corresponding weight
-    :param nparts: number of partitions
-    :param division: list of final relative weights of each partition
-    :param weight_attr:
-    :param split:
-    :param recursive:
-    :param metis_options:
-    :return:
+    Build partitions based on set of polygon's corresponding
+    graph, with respect to given nb of partitions, constraints
+    and target weights
+
+    Parameters
+    ----------
+    polygons: list[shapely.geometry.Polygon]
+        collection of polygons to aggregate
+    weights: list[float]
+        polygons' corresponding weight
+    nparts: int
+        number of partitions
+    tpweights:
+        list of target relative weights for each partition
+    weight_attr:
+    split_name: str
+        Name of the method used for splitting
+    recursive:
+    metis_options:
+
+    Returns
+    -------
     """
     if "contig" not in metis_options.keys():
         metis_options["contig"] = False
-    graph = polygon_collection_to_graph(polygons, weights, split,
+    graph = polygon_collection_to_graph(polygons, weights, split_name,
                                         metis_options["contig"], weight_attr)
-    tpweights = [(d,) for d in division]
-    partition = part_graph(graph, nparts, weight_attr, tpweights, recursive, **metis_options)
+    partition = part_graph(graph, nparts, weight_attr,
+                           tpweights, recursive, **metis_options)
 
     # Return unions of polygons belonging to each part (no multi-polygons)
     return explode([no_artifact_unary_union([polygons[n] for n in part]) for part in partition])
@@ -84,8 +100,8 @@ def area_partition_polygon(polygon, unit_area, disaggregation_factor, precision,
 
     area = [int(poly.area / precision) for poly in split_poly]
 
-    return aggregate_partitions(split_poly, area, nparts, division, "area",
-                                split, recursive, **metis_options)
+    return build_partitions(split_poly, area, nparts, [(d,) for d in division],
+                            "area", split.__name__, recursive, **metis_options)
 
 
 def centroid(point_collection):
@@ -194,9 +210,11 @@ def cut_at_distance(line, distance, normalized=False):
         elif pd > distance:
             cp = line.interpolate(distance, normalized=normalized)
             try:
-                return [LineString(coords[:i] + [(cp.x, cp.y)]), LineString([(cp.x, cp.y)] + coords[i:])]
+                return [LineString(coords[:i] + [(cp.x, cp.y)]),
+                        LineString([(cp.x, cp.y)] + coords[i:])]
             except ValueError:
-                return [LineString(coords[:i] + [(cp.x, cp.y, cp.z)]), LineString([(cp.x, cp.y, cp.z)] + coords[i:])]
+                return [LineString(coords[:i] + [(cp.x, cp.y, cp.z)]),
+                        LineString([(cp.x, cp.y, cp.z)] + coords[i:])]
 
 
 def cut_at_point(line, point):
@@ -435,7 +453,8 @@ def intersects(geometry, geometry_collection, r_tree=None):
 
     list_of_intersecting_features = list(r_tree.intersection(geometry.bounds))
 
-    return [False if f not in list_of_intersecting_features else geometry.intersects(geometry_collection[f]) for f in
+    return [False if f not in list_of_intersecting_features
+            else geometry.intersects(geometry_collection[f]) for f in
             range(len(geometry_collection))]
 
 
@@ -695,7 +714,8 @@ def no_artifact_unary_union(geoms, eps=0.00001):
     :param eps: buffering precision
     :return:
     """
-    return unary_union(geoms).buffer(eps, 1, join_style=JOIN_STYLE.mitre).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
+    return unary_union(geoms).buffer(eps, 1, join_style=JOIN_STYLE.mitre
+                                     ).buffer(-eps, 1, join_style=JOIN_STYLE.mitre)
 
 
 def overlapping_features(geometry, geometry_collection, r_tree=None):
@@ -729,41 +749,71 @@ def overlaps(geometry, geometry_collection, r_tree=None):
         geometry) for i, geom in enumerate(geometry_collection)]
 
 
-def polygon_to_mesh(polygon, threshold, method):
-    """
+def _intersect(polygon1, polygon2):
+    if polygon1.within(polygon2):
+        return polygon1
+    elif polygon1.overlaps(polygon2):
+        return polygon1.intersection(polygon2)
 
-    :param polygon:
-    :param threshold:
-    :param method: {'hexana', 'fishnet'}
-    :return:
+
+def polygon_to_mesh(polygon, threshold, method, nb_processes=mp.cpu_count(), chunksize=500):
+    """ Convert polygon into mesh of smaller unit polygons
+
+    Parameters
+    ----------
+
+    polygon:
+    threshold:
+    method:
+    nb_processes
+    chunksize
+
+    Returns
+    -------
     """
     grid = method(*polygon.bounds, area=threshold)
-    split = []
-    for unit in grid:
-        if unit.within(polygon):
-            split.append(unit)
-        elif unit.overlaps(polygon):
-            split.append(unit.intersection(polygon))
+    # split = []
 
-    return explode(split)
+    with mp.Pool(processes=nb_processes) as pool:
+        meshes = list(pool.imap(partial(_intersect, polygon2=polygon),
+                                grid, chunksize=chunksize))
+
+    # for unit in grid:
+    #     if unit.within(polygon):
+    #         split.append(unit)
+    #     elif unit.overlaps(polygon):
+    #         split.append(unit.intersection(polygon))
+
+    return explode([m for m in meshes if m is not None])
 
 
-def polygon_collection_to_graph(polygon_collection, weights, split, is_contiguous, weight_attr="weight"):
+def polygon_collection_to_graph(polygon_collection, weights, split_name,
+                                is_contiguous, weight_attr="weight"):
     """ Convert collection of polygons to networkx graph
 
     Conversion of a polygon collection into a graph allows
     later graph partitioning
-    :param polygon_collection:
-    :param weights: weight of each polygon in collection
-    :param split: split function
-    :param is_contiguous: True or False (metis options)
-    :param weight_attr: name of weight attribute
-    :return:
+
+    Parameters
+    ----------
+
+    polygon_collection:
+    weights:
+        weight of each polygon in collection
+    split_name: str
+        Split method name
+    is_contiguous: bool
+        True or False (metis options)
+    weight_attr: str
+        name of weight attribute
+
+    Returns
+    -------
     """
     if not is_iterable(polygon_collection):
         raise TypeError("Input must be a collection but is '{}'".format(type(polygon_collection)))
 
-    if 'katana' in split.__name__:
+    if 'katana' in split_name:
         is_katana = True
     else:
         is_katana = False
@@ -772,7 +822,8 @@ def polygon_collection_to_graph(polygon_collection, weights, split, is_contiguou
     graph = nx.Graph()
 
     for n, polygon in enumerate(polygon_collection):
-        list_of_intersecting_features, _ = intersecting_features(polygon, polygon_collection, r_tree)
+        list_of_intersecting_features, _ = intersecting_features(polygon, polygon_collection,
+                                                                 r_tree)
         list_of_intersecting_features.remove(n)
         if list_of_intersecting_features or not is_contiguous:
             if is_katana:
@@ -891,7 +942,8 @@ def shared_area(polygon1, polygon2, normalized=False):
 
 
 @type_assert(polygon=(Polygon, MultiPolygon), normalized=bool)
-def shared_area_among_collection(polygon: Polygon, polygon_collection, normalized: bool = False, r_tree=None):
+def shared_area_among_collection(polygon: Polygon, polygon_collection,
+                                 normalized: bool = False, r_tree=None):
     """ Get area shared by a polygon with polygons from a collection
 
     :param polygon:
@@ -905,8 +957,8 @@ def shared_area_among_collection(polygon: Polygon, polygon_collection, normalize
 
     poly_intersects = intersects(polygon, polygon_collection, r_tree)
 
-    return [shared_area(polygon, poly, normalized) if poly_intersects[n] else 0 for n, poly in enumerate(
-            polygon_collection)]
+    return [shared_area(polygon, poly, normalized)
+            if poly_intersects[n] else 0 for n, poly in enumerate(polygon_collection)]
 
 
 def split_collection(geometry_collection, threshold, method, get_explode):
