@@ -18,16 +18,21 @@ except RuntimeError:  # No Metis DLL
     warnings.warn("Metis error. No graph partitioning will be available", ImportMetisWarning)
 
 
-def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_options):
+def part_graph(graph, nparts, node_weight_attr, tpweights,
+               recursive, **metis_options):
     """ Partition graph
 
-    :param graph:
-    :param nparts:
-    :param node_weight_attr:
-    :param tpweights:
-    :param recursive:
-    :param metis_options:
-    :return:
+    Parameters
+    ----------
+    graph:
+    nparts:
+    node_weight_attr:
+    tpweights:
+    recursive:
+    metis_options:
+
+    Returns
+    -------
     """
 
     # If contiguous partition is requested, only keep main contiguous graph component
@@ -36,7 +41,7 @@ def part_graph(graph, nparts, node_weight_attr, tpweights, recursive, **metis_op
 
     graph.graph["node_weight_attr"] = node_weight_attr
     _, parts = metis.part_graph(graph, nparts, tpwgts=tpweights,
-                                ubvec=None, recursive=recursive, **metis_options)
+                                recursive=recursive, **metis_options)
     partition = [[] for _ in range(nparts)]
     for u, i in zip(graph, parts):
         partition[i].append(u)
@@ -52,7 +57,8 @@ if __name__ == "__main__":
                         "/Geo layers/Parc amazonien/enp_pn_s_973.shp")
     # test = PolygonLayer("/home/benjamin/Desktop/APUREZA/geocoding/04_Codes/01_CodeSaoSeb/admin_level_10.shp")
     test = test.to_crs(epsg=32723)
-    m = test.partition(100000000, contig=True, ncuts=50, show_progressbar=True, objtype="cut")
+    m = test.partition(50000000, contig=True, ncuts=50, show_progressbar=True, objtype="cut",
+                       ubvec=[1.04])
 
     m.plot()
 
